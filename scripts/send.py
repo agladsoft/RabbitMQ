@@ -22,4 +22,4 @@ class Send(RabbitMq):
 
 
 if __name__ == '__main__':
-    Send().main('/home/uventus/Works/Rabbitmq/ОтчетПоКонтролируемомуИНеконтролируемомуФрахту.json')
+    Send().main('/home/uventus/Works/Rabbitmq/test.json')
