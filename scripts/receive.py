@@ -36,7 +36,7 @@ class Receive(RabbitMq):
 
     def write_to_json(self, msg, en):
         ''' Write data to json file '''
-        with open(f"{os.environ.get('XL_IDP_ROOT_RABBITMQ')}/{en}.json", 'w') as file:
+        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/json/{en}.json", 'w') as file:
             json.dump(msg, file)
 
     def main(self):
