@@ -1,6 +1,10 @@
 import json
+import os
+
 from __init__ import RabbitMq
 from datetime import datetime
+
+
 
 
 class Receive(RabbitMq):
@@ -32,7 +36,7 @@ class Receive(RabbitMq):
 
     def write_to_json(self, msg, en):
         ''' Write data to json file '''
-        with open(f'/home/uventus/Works/Rabbitmq/Test_send_timur/{en}.json', 'w') as file:
+        with open(f"{os.environ.get('XL_IDP_ROOT_RABBITMQ')}/{en}.json", 'w') as file:
             json.dump(msg, file)
 
     def main(self):
