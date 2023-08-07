@@ -1,16 +1,17 @@
 import json
 import os
-
 from __init__ import RabbitMq
 from datetime import datetime
+import app_logger
 
-
+logger: app_logger = app_logger.get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
 
 
 class Receive(RabbitMq):
 
     def read_msg(self):
         ''' Connecting to a queue and receiving messages '''
+        logger.info('Connect')
         channel, connection = self.connect_rabbit()
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
         channel.queue_declare(queue=self.queue_name)
@@ -37,11 +38,12 @@ class Receive(RabbitMq):
     def write_to_json(self, msg, en):
         ''' Write data to json file '''
         with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/json/{en}.json", 'w') as file:
-            json.dump(msg, file)
+            json.dump(msg, file,ensure_ascii=False, indent=4)
 
     def main(self):
+        logger.info('Start read')
         self.read_msg()
-
+        logger.info('End read')
 
 if __name__ == '__main__':
     Receive().main()
