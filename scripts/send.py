@@ -14,6 +14,7 @@ class Send(RabbitMq):
         channel.basic_publish(exchange=self.exchange,
                               routing_key=self.routing_key,
                               body=msg)
+
         connection.close()
 
     def main(self, file_path):

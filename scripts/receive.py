@@ -22,7 +22,14 @@ class Receive(RabbitMq):
 
     def callback(self, ch, method, properties, body):
         ''' Working with the message body'''
+        logger.info('Get body message')
+        self.save_msg(body)
         self.read_json(body)
+        # ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    def save_text_msg(self,msg):
+        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/text_msg.txt",'w') as file:
+            file.write(msg)
 
     def change_columns(self, data):
         voyageDate = data.get('voyageDate')
@@ -35,6 +42,10 @@ class Receive(RabbitMq):
         if containerSize is not None:
             data['containerSize'] = int(containerSize)
 
+
+    def save_msg(self,body):
+        with open('msg.txt','w') as file:
+            file.write(body)
     @staticmethod
     def convert_format_date(date: str) -> str:
         """
@@ -50,6 +61,7 @@ class Receive(RabbitMq):
 
     def read_json(self, msg):
         ''' Decoding a message and working with data'''
+        logger.info('Read json')
         data = json.loads(msg.decode('utf-8-sig'))
         for n, d in enumerate(data):
             self.add_new_columns(d)
@@ -62,8 +74,8 @@ class Receive(RabbitMq):
 
     def write_to_json(self, msg, en):
         ''' Write data to json file '''
-        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/json/{en}.json", 'w') as file:
-            json.dump(msg, file, ensure_ascii=False, indent=4)
+        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/json/{en}-{datetime.now()}.json", 'w') as file:
+            json.dump(msg, file,indent=4,ensure_ascii=False)
 
     def main(self):
         logger.info('Start read')
