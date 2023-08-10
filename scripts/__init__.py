@@ -9,7 +9,7 @@ class RabbitMq:
         self.exchange = 'DC_TEST_EX'
         self.routing_key = 'DC_TEST_RT'
         self.durable = True
-        self.queue_name = 'test_queue'
+        self.queue_name = 'DC_TEST_Q'
 
     def connect_rabbit(self):
         credentials = pika.PlainCredentials(self.user, self.password)
