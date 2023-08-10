@@ -29,7 +29,7 @@ class Receive(RabbitMq):
 
     def save_text_msg(self,msg):
         with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/text_msg.txt",'w') as file:
-            file.write(msg)
+            file.write(str(msg))
 
     def change_columns(self, data):
         voyageDate = data.get('voyageDate')
