@@ -8,7 +8,7 @@ class RabbitMq:
         self.password = '8KZ3wXA5W2rP'
         self.exchange = 'DC_TEST_EX'
         self.routing_key = 'DC_TEST_RT'
-        self.durable = True
+        self.durable = False
         self.queue_name = 'DC_TEST_Q'
 
     def connect_rabbit(self):
