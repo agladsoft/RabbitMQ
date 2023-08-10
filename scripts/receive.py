@@ -28,7 +28,7 @@ class Receive(RabbitMq):
         # ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def save_text_msg(self,msg):
-        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/text_msg.txt",'w') as file:
+        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/{datetime.now()}-text_msg.txt",'w') as file:
             file.write(str(msg))
 
     def change_columns(self, data):
