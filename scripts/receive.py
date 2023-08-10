@@ -14,7 +14,7 @@ class Receive(RabbitMq):
         ''' Connecting to a queue and receiving messages '''
         logger.info('Connect')
         channel, connection = self.connect_rabbit()
-        channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
+        channel.exchange_declare(exchange=self.exchange, exchange_type='direct')
         channel.queue_declare(queue=self.queue_name)
         channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
         channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=True)
