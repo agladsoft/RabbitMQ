@@ -28,8 +28,8 @@ class Receive(RabbitMq):
         # ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def save_text_msg(self,msg):
-        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/{datetime.now()}-text_msg.txt",'w') as file:
-            file.write(str(msg))
+        with open(f"{os.environ.get('XL_IDP_PATH_RABBITMQ')}/{datetime.now()}-text_msg.json",'w') as file:
+            json.dump(msg.decode('utf-8-sig'), file, indent=4,ensure_ascii=False)
 
     def change_columns(self, data):
         voyageDate = data.get('voyageDate')
