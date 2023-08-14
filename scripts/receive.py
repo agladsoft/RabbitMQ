@@ -68,6 +68,8 @@ class Receive(RabbitMq):
     def add_new_columns(self, data):
         ''' Adding new columns '''
         data['original_file_parsed_on'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        data['is_obsolete'] = False
+        data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     def write_to_json(self, msg, en):
         ''' Write data to json file '''
