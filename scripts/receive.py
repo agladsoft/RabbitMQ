@@ -59,7 +59,8 @@ class Receive(RabbitMq):
     def read_json(self, msg):
         ''' Decoding a message and working with data'''
         logger.info('Read json')
-        data = json.loads(msg.decode('utf-8-sig'))
+        msg = msg.decode('utf-8-sig')
+        data = json.loads(msg)
         for n, d in enumerate(data):
             self.add_new_columns(d)
             self.change_columns(d)
