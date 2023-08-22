@@ -1,5 +1,10 @@
 while true;
+DEBUG=True
 do
-	python3 ${XL_IDP_ROOT_RABBITMQ}/scripts/receive.py
-	sleep 3600;
+  if [[ ${DEBUG}]]
+	  then
+	     python3 ${XL_IDP_ROOT_RABBITMQ}/scripts/receive.py
+	else
+	  sleep 3600
+	  python3 ${XL_IDP_ROOT_RABBITMQ}/scripts/receive.py
 done
