@@ -23,4 +23,4 @@ class Send(RabbitMq):
 
 
 if __name__ == '__main__':
-    Send().main('/home/uventus/Works/Rabbitmq/test_deal.json')
+    Send().main('../test_deal.json')
