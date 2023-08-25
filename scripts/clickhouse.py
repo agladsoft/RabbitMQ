@@ -1,16 +1,29 @@
 import sys
 import time
+
+from tinydb import Query
+
 from app_logger import *
+from receive import Receive
+from typing import List, Union
+from tinydb.table import Document
+from datetime import datetime, timedelta
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
+from clickhouse_connect.driverc.dataconv import Sequence
 
 
-class ClickHouse:
-    def __init__(self, logger: logging.getLogger):
-        self.logger: logging.getLogger = logger
+logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
+date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
+
+
+class ClickHouse(Receive):
+    def __init__(self):
+        super().__init__()
         self.client: Client = self.connect_to_db()
 
-    def connect_to_db(self) -> Client:
+    @staticmethod
+    def connect_to_db() -> Client:
         """
         Connecting to clickhouse.
         :return: Client ClickHouse.
@@ -19,45 +32,129 @@ class ClickHouse:
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connect to clickhouse")
+            logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
-            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             print("error_connect_db", file=sys.stderr)
             sys.exit(1)
         return client
 
-    def count_number_loaded_rows(self, data: list, count_rows: int, file_name: str) -> None:
+    def count_number_loaded_rows(self) -> None:
         """
         Counting the number of rows to update transaction data.
-        :param data: Data from RabbitMQ.
-        :param count_rows: Count rows of db.
-        :param file_name: Name of file.
         :return:
         """
-        while count_rows != self.client.query(
-                f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{file_name}'"
+        all_data_cache: List[Document] = self.db.all()
+        while all_data_cache[-1]["len_rows"] != self.client.query(
+                f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{all_data_cache[-1]['file_name']}'"
         ).result_rows[0][0]:
             time.sleep(10)
-        self.update_deal(data, file_name)
+        self.update_status(all_data_cache[-1], all_data_cache)
+        self.delete_data_from_cache_by_date()
 
-    def update_deal(self, data: list, file_name: str) -> None:
+    @staticmethod
+    def set_nested(path: list, val: Union[bool, str], condition: str):
+        def transform(doc):
+            list_current = doc
+            for key in path[:-1]:
+                list_current = list_current[key]
+
+            for current in list_current:
+                if condition == current["uuid"]:
+                    current[path[-1]] = val
+
+        return transform
+
+    @staticmethod
+    def change_values(is_obsolete, row, date_now):
         """
-        Updating the transaction by parameters.
-        :param data: Data from RabbitMQ.
-        :param file_name: Name of file.
+
+        :param is_obsolete:
+        :param row:
+        :param date_now:
         :return:
         """
-        group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data}.values())
+        row["is_obsolete"] = is_obsolete
+        row['is_obsolete_date'] = date_now
+
+    def write_updated_data(self, query: str, data_cache: Union[Document, list], is_obsolete: bool):
+        """
+
+        :param query:
+        :param data_cache:
+        :param is_obsolete:
+        :return:
+        """
+        data_db: Sequence = self.client.query(query).result_rows
+        if not data_db:
+            return
+        date_now: str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        if not is_obsolete:
+            for index, row in enumerate(data_cache["data"]):
+                self.change_values(is_obsolete, row, date_now)
+                self.write_to_json(row, index, dir_name="update")
+        else:
+            for all_data_cache in data_cache:
+                for index, row in enumerate(all_data_cache["data"]):
+                    for row_db in data_db:
+                        if row["uuid"] == str(row_db[0]):
+                            self.change_values(is_obsolete, row, date_now)
+                            self.write_to_json(row, index, dir_name="update")
+        self.update_cache(data_db, is_obsolete, date_now)
+
+    def update_cache(self, data_db: Sequence, is_obsolete: bool, date_now: str):
+        """
+
+        :param data_db:
+        :param is_obsolete:
+        :param date_now:
+        :return:
+        """
+        for row in data_db:
+            self.db.update(self.set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
+            self.db.update(self.set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
+
+    def remove_nested(self, path: list, condition: str):
+        def transform(doc):
+            list_current = doc
+            for key in path[:-1]:
+                list_current = list_current[key]
+
+            list_current_copy: list = list_current.copy()
+            if not list_current_copy:
+                query = Query()
+                self.db.remove(query.data == [])
+            for current in list_current_copy:
+                if condition > current["is_obsolete_date"] and current["is_obsolete"] is True:
+                    list_current.remove(current)
+
+        return transform
+
+    def delete_data_from_cache_by_date(self):
+        """
+
+        :return:
+        """
+        date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        self.db.remove(self.remove_nested(['data', 'is_obsolete_date'], date))
+
+    def update_status(self, data_cache: Document, all_data_cache) -> None:
+        """
+        Updating the transaction by parameters.
+        :return:
+        """
+        self.write_updated_data(f"""
+            SELECT *
+            FROM datacore_freight
+            WHERE original_file_parsed_on='{data_cache['file_name']}'""", data_cache, is_obsolete=False)
+
+        group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data_cache["data"]}.values())
         for item in group_list:
-            self.client.query(f"""ALTER TABLE datacore_freight 
-                UPDATE is_obsolete=true
-                WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false AND orderNumber='{item['orderNumber']}'""")
-        self.client.query(f"""
-            ALTER TABLE datacore_freight
-            UPDATE is_obsolete=false
-            WHERE original_file_parsed_on='{file_name}'
-        """)
-        self.logger.info("Success updated `is_obsolete` key")
+            self.write_updated_data(f"""SELECT *
+                        FROM datacore_freight
+                        WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
+                        AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
+        logger.info("Success updated `is_obsolete` key")
 
     def delete_deal(self) -> None:
         """
@@ -65,4 +162,9 @@ class ClickHouse:
         :return:
         """
         self.client.query("DELETE FROM datacore_freight WHERE is_obsolete=true")
-        self.logger.info("Successfully deleted old transaction data")
+        logger.info("Successfully deleted old transaction data")
+
+
+if __name__ == "__main__":
+    clickhouse = ClickHouse()
+    clickhouse.count_number_loaded_rows()

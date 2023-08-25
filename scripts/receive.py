@@ -1,10 +1,11 @@
+import uuid
 import json
 import contextlib
 from app_logger import *
 from pathlib import Path
+from tinydb import TinyDB
 from __init__ import RabbitMq
 from datetime import datetime
-from clickhouse import ClickHouse
 
 
 logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
@@ -12,6 +13,9 @@ date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
 
 
 class Receive(RabbitMq):
+    def __init__(self):
+        super().__init__()
+        self.db = TinyDB('../db.json', indent=4, ensure_ascii=False)
 
     def read_msg(self):
         ''' Connecting to a queue and receiving messages '''
@@ -64,25 +68,24 @@ class Receive(RabbitMq):
         ''' Decoding a message and working with data'''
         logger.info('Read json')
         msg = msg.decode('utf-8-sig')
-        clickhouse = ClickHouse(logger)
         file_name = f"data_core_{datetime.now()}.json"
-        clickhouse.delete_deal()
         data = json.loads(msg)
         for n, d in enumerate(data):
             self.add_new_columns(d, file_name)
             self.change_columns(d)
             self.write_to_json(d, n)
-        clickhouse.count_number_loaded_rows(data, len(data), file_name)
+        self.db.insert({"len_rows": len(data), "file_name": file_name, "data": data})
 
     def add_new_columns(self, data, file_name):
         ''' Adding new columns '''
+        data['uuid'] = str(uuid.uuid4())
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    def write_to_json(self, msg, en):
+    def write_to_json(self, msg, en, dir_name="json"):
         ''' Write data to json file '''
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json/{en}-{datetime.now()}.json"
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{en}-{datetime.now()}.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
