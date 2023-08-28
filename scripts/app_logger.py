@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 _log_format: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 _dateftm: str = "%d/%B/%Y %H:%M:%S"
-os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
-os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/docker_project/RabbitMQ'
+
 
 def get_my_env_var(var_name: str) -> str:
     try:
