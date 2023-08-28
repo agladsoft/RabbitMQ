@@ -47,7 +47,7 @@ class DataCoreClient(Receive):
                 f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{all_data_cache[-1]['file_name']}'"
         ).result_rows[0][0]:
             logger.info("The data has not yet been uploaded to the database")
-            time.sleep(10)
+            time.sleep(60)
         return all_data_cache
 
     @staticmethod
@@ -186,5 +186,4 @@ class DataCoreClient(Receive):
 
 
 if __name__ == "__main__":
-    data_core_client: DataCoreClient = DataCoreClient()
-    data_core_client.main()
+    DataCoreClient().main()
