@@ -58,6 +58,7 @@ class Receive(RabbitMq):
         logger.info('Get body message')
         self.save_text_msg(body)
         self.read_json(body)
+        time.sleep(10)
         DataCoreClient().main()
         # ch.basic_ack(delivery_tag=method.delivery_tag)
 
