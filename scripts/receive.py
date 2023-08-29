@@ -15,7 +15,7 @@ date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
 class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
-        self.db = TinyDB('../db.json', indent=4, ensure_ascii=False)
+        self.db = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
     def read_msg(self):
         ''' Connecting to a queue and receiving messages '''
