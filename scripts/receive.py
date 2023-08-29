@@ -23,8 +23,7 @@ date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
 class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
-        self.db = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
-        self.client: Client = self.connect_to_db()
+        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
     @staticmethod
     def connect_to_db() -> Client:
@@ -58,7 +57,6 @@ class Receive(RabbitMq):
         logger.info('Get body message')
         self.save_text_msg(body)
         self.read_json(body)
-        time.sleep(10)
         DataCoreClient().main()
         # ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -98,38 +96,22 @@ class Receive(RabbitMq):
         msg = msg.decode('utf-8-sig')
         file_name = f"data_core_{datetime.now()}.json"
         data = json.loads(msg)
-        list_uuids: List[str] = self.get_list_from_query()
         for n, d in enumerate(data):
-            self.add_new_columns(d, file_name, list_uuids)
+            self.add_new_columns(d, file_name)
             self.change_columns(d)
             self.write_to_json(d, n)
         self.db.insert({"len_rows": len(data), "file_name": file_name, "data": data})
-
-    def get_list_from_query(self) -> list:
-        """
-        Get all uuid values from the database in order not to write the same uuid.
-        :return:
-        """
-        try:
-            return [str(uuid_db[0]) for uuid_db in self.client.query("SELECT uuid FROM datacore_freight").result_rows]
-        except Exception as ex_connect:
-            logger.error(f"Failed to connect to the database and get all the uuid values. Exception is {ex_connect}")
-            return []
+        logger.info(f"Data from the queue is written to the cache. File is {file_name}")
 
     @staticmethod
-    def add_new_columns(data, file_name, list_uuids):
+    def add_new_columns(data, file_name):
         """
         Adding new columns.
         :param data:
         :param file_name:
-        :param list_uuids:
         :return:
         """
-        uuid_gen: str = str(uuid.uuid4())
-        while uuid_gen in list_uuids:
-            uuid_gen = str(uuid.uuid4())
-        list_uuids.append(uuid_gen)
-        data['uuid'] = uuid_gen
+        data['uuid'] = str(uuid.uuid4())
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -152,6 +134,7 @@ class Receive(RabbitMq):
 class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
+        self.client: Client = self.connect_to_db()
 
     def get_all_data_db_accord_last_data(self) -> List[Document]:
         """
