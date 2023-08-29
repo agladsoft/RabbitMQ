@@ -107,16 +107,16 @@ class DataCoreClient(Receive):
         self.update_cache(data_db, is_obsolete, date_now)
 
     def update_cache(self, data_db: Sequence, is_obsolete: bool, date_now: str) -> None:
-            """
-            Updating data from the cache.
-            :param data_db: Data from the database.
-            :param is_obsolete: Setting the value of is_obsolete.
-            :param date_now: write in cache datetime now.
-            :return:
-            """
-            for row in data_db:
-                self.db.update(self.set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
-                self.db.update(self.set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
+        """
+        Updating data from the cache.
+        :param data_db: Data from the database.
+        :param is_obsolete: Setting the value of is_obsolete.
+        :param date_now: write in cache datetime now.
+        :return:
+        """
+        for row in data_db:
+            self.db.update(self.set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
+            self.db.update(self.set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
 
     def remove_nested(self, path: list, condition: str):
         """
