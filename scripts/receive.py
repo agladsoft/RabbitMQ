@@ -24,6 +24,23 @@ class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
         self.db = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
+        self.client: Client = self.connect_to_db()
+
+    @staticmethod
+    def connect_to_db() -> Client:
+        """
+        Connecting to clickhouse.
+        :return: Client ClickHouse.
+        """
+        try:
+            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
+                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
+            client.query("SET allow_experimental_lightweight_delete=1")
+            logger.info("Success connect to clickhouse")
+        except Exception as ex_connect:
+            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            sys.exit(1)
+        return client
 
     def read_msg(self):
         ''' Connecting to a queue and receiving messages '''
@@ -80,15 +97,38 @@ class Receive(RabbitMq):
         msg = msg.decode('utf-8-sig')
         file_name = f"data_core_{datetime.now()}.json"
         data = json.loads(msg)
+        list_uuids: List[str] = self.get_list_from_query()
         for n, d in enumerate(data):
-            self.add_new_columns(d, file_name)
+            self.add_new_columns(d, file_name, list_uuids)
             self.change_columns(d)
             self.write_to_json(d, n)
         self.db.insert({"len_rows": len(data), "file_name": file_name, "data": data})
 
-    def add_new_columns(self, data, file_name):
-        ''' Adding new columns '''
-        data['uuid'] = str(uuid.uuid4())
+    def get_list_from_query(self) -> list:
+        """
+        Get all uuid values from the database in order not to write the same uuid.
+        :return:
+        """
+        try:
+            return [str(uuid_db[0]) for uuid_db in self.client.query("SELECT uuid FROM datacore_freight").result_rows]
+        except Exception as ex_connect:
+            logger.error(f"Failed to connect to the database and get all the uuid values. Exception is {ex_connect}")
+            return []
+
+    @staticmethod
+    def add_new_columns(data, file_name, list_uuids):
+        """
+        Adding new columns.
+        :param data:
+        :param file_name:
+        :param list_uuids:
+        :return:
+        """
+        uuid_gen: str = str(uuid.uuid4())
+        while uuid_gen in list_uuids:
+            uuid_gen = str(uuid.uuid4())
+        list_uuids.append(uuid_gen)
+        data['uuid'] = uuid_gen
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -111,23 +151,6 @@ class Receive(RabbitMq):
 class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
-        self.client: Client = self.connect_to_db()
-
-    @staticmethod
-    def connect_to_db() -> Client:
-        """
-        Connecting to clickhouse.
-        :return: Client ClickHouse.
-        """
-        try:
-            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
-                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
-            client.query("SET allow_experimental_lightweight_delete=1")
-            logger.info("Success connect to clickhouse")
-        except Exception as ex_connect:
-            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            sys.exit(1)
-        return client
 
     def get_all_data_db_accord_last_data(self) -> List[Document]:
         """
