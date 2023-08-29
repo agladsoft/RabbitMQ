@@ -264,7 +264,7 @@ class DataCoreClient(Receive):
                         FROM datacore_freight
                         WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
                         AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
-        logger.info("Success updated `is_obsolete` key")
+        logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
 
     def delete_deal(self) -> None:
         """
@@ -280,7 +280,9 @@ class DataCoreClient(Receive):
         :return:
         """
         all_data_cache_: List[Document] = self.get_all_data_db_accord_last_data()
-        self.update_status(all_data_cache_[-1], all_data_cache_)
+        for data_cache in all_data_cache_:
+            if any(data["is_obsolete"] is None for data in data_cache["data"]):
+                self.update_status(data_cache, all_data_cache_)
         self.delete_data_from_cache()
 
 
