@@ -153,10 +153,10 @@ class DataCoreClient(Receive):
         Updating the transaction by parameters.
         :return:
         """
-        self.write_updated_data(f"""
+        self.write_updated_data("""
             SELECT *
             FROM datacore_freight
-            WHERE original_file_parsed_on='{data_cache['file_name']}' AND is_obsolete is NULL""", data_cache, is_obsolete=False)
+            WHERE is_obsolete is NULL""", data_cache, is_obsolete=False)
 
         group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data_cache["data"]}.values())
         for item in group_list:
