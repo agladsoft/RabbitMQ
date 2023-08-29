@@ -1,3 +1,4 @@
+import time
 import uuid
 import json
 import contextlib
@@ -29,6 +30,7 @@ class Receive(RabbitMq):
 
     def callback(self, ch, method, properties, body):
         ''' Working with the message body'''
+        time.sleep(self.time_sleep)
         logger.info('Get body message')
         self.save_text_msg(body)
         self.read_json(body)

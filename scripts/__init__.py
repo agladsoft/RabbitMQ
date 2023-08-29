@@ -10,6 +10,7 @@ class RabbitMq:
         self.routing_key = 'DC_TEST_RT'
         self.durable = True
         self.queue_name = 'DC_TEST_Q'
+        self.time_sleep = 10
 
     def connect_rabbit(self):
         credentials = pika.PlainCredentials(self.user, self.password)
