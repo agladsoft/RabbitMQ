@@ -52,7 +52,7 @@ class DataCoreClient(Receive):
     @staticmethod
     def set_nested(path: list, val: Union[bool, str], condition: str):
         """
-        Deleting nested data from the cache.
+        Setting nested data from the cache.
         :param path: Nested data path.
         :param val: The value to replace the old one.
         :param condition: Field from json (the current field is uuid).
