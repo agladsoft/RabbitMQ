@@ -33,7 +33,6 @@ class DataCoreClient(Receive):
             logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            print("error_connect_db", file=sys.stderr)
             sys.exit(1)
         return client
 
