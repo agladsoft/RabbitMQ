@@ -37,7 +37,7 @@ class DataCoreClient(Receive):
             sys.exit(1)
         return client
 
-    def count_number_loaded_rows(self) -> List[Document]:
+    def get_all_data_db_accord_last_data(self) -> List[Document]:
         """
         Counting the number of rows to update transaction data.
         :return:
@@ -180,7 +180,7 @@ class DataCoreClient(Receive):
         The main method that runs the basic functions.
         :return:
         """
-        all_data_cache_: List[Document] = self.count_number_loaded_rows()
+        all_data_cache_: List[Document] = self.get_all_data_db_accord_last_data()
         self.update_status(all_data_cache_[-1], all_data_cache_)
         self.delete_data_from_cache()
 
