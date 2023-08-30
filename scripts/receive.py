@@ -24,21 +24,6 @@ class Receive(RabbitMq):
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
         self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
-    def connect_to_db(self) -> Client:
-        """
-        Connecting to clickhouse.
-        :return: Client ClickHouse.
-        """
-        try:
-            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
-                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
-            client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connect to clickhouse")
-        except Exception as ex_connect:
-            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            sys.exit(1)
-        return client
-
     def read_msg(self):
         """
         Connecting to a queue and receiving messages
@@ -66,7 +51,10 @@ class Receive(RabbitMq):
         time.sleep(self.time_sleep)
         self.save_text_msg(body)
         self.read_json(body)
-        DataCoreClient().main()
+        dat_core_client: DataCoreClient = DataCoreClient()
+        dat_core_client.main()
+        del dat_core_client
+
 
     @staticmethod
     def save_text_msg(msg):
@@ -165,10 +153,33 @@ class Receive(RabbitMq):
         self.logger.info('End read')
 
 
-class DataCoreClient(Receive):
+class Singleton(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in Singleton._instances:
+            Singleton._instances[cls] = super().__call__(*args, **kwargs)
+        return Singleton._instances[cls]
+
+
+class DataCoreClient(Receive, metaclass=Singleton):
     def __init__(self):
         super().__init__()
         self.client: Client = self.connect_to_db()
+
+    def connect_to_db(self) -> Client:
+        """
+        Connecting to clickhouse.
+        :return: Client ClickHouse.
+        """
+        try:
+            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
+                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
+            client.query("SET allow_experimental_lightweight_delete=1")
+            self.logger.info("Success connect to clickhouse")
+        except Exception as ex_connect:
+            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            sys.exit(1)
+        return client
 
     def get_all_data_db_accord_last_data(self) -> List[Document]:
         """
@@ -184,7 +195,7 @@ class DataCoreClient(Receive):
         return all_data_cache
 
     @staticmethod
-    def set_nested(path: list, val: Union[bool, str], condition: str):
+    def _set_nested(path: list, val: Union[bool, str], condition: str):
         """
         Setting nested data from the cache.
         :param path: Nested data path.
@@ -249,10 +260,10 @@ class DataCoreClient(Receive):
         :return:
         """
         for row in data_db:
-            self.db.update(self.set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
-            self.db.update(self.set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
+            self.db.update(self._set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
+            self.db.update(self._set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
 
-    def remove_nested(self, path: list, condition: str):
+    def _remove_nested(self, path: list, condition: str):
         """
         Deleting nested data from the cache.
         :param path: Nested data path.
@@ -280,7 +291,7 @@ class DataCoreClient(Receive):
         :return:
         """
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        self.db.remove(self.remove_nested(['data', 'is_obsolete_date'], date))
+        self.db.remove(self._remove_nested(['data', 'is_obsolete_date'], date))
 
     def update_status(self, data_cache: Document, all_data_cache) -> None:
         """
@@ -318,6 +329,9 @@ class DataCoreClient(Receive):
             if any(data["is_obsolete"] is None for data in data_cache["data"]):
                 self.update_status(data_cache, all_data_cache_)
         self.delete_data_from_cache()
+
+    def __del__(self):
+        self.client.close()
 
 
 if __name__ == '__main__':
