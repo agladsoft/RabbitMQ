@@ -178,8 +178,6 @@ class DataCoreClient(Receive):
         Counting the number of rows to update transaction data.
         :return:
         """
-        date: str = (datetime.now() - timedelta(days=-1)).strftime('%Y-%m-%d')
-        self.db.remove(self.remove_nested(['data', 'is_obsolete_date'], date))
         all_data_cache: List[Document] = self.db.all()
         while all_data_cache[-1]["len_rows"] != self.client.query(
                 f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{all_data_cache[-1]['file_name']}'"
