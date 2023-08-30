@@ -62,9 +62,8 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
-        self.logger.info(f"callback for ch={ch}, method={method}, properties={properties} called")
+        self.logger.info(f"callback for ch={ch}, method={method}, properties={properties} and body_message called")
         time.sleep(self.time_sleep)
-        self.logger.info('Get body message')
         self.save_text_msg(body)
         self.read_json(body)
         DataCoreClient().main()
