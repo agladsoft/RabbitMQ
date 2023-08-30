@@ -2,7 +2,7 @@ import pika
 
 
 class RabbitMq:
-    def __init__(self,file_path=None):
+    def __init__(self):
         self.user = 'rabbitmq'
         self.host = '10.23.4.199'
         self.password = '8KZ3wXA5W2rP'

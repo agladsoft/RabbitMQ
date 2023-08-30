@@ -15,18 +15,16 @@ from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from clickhouse_connect.driverc.dataconv import Sequence
 
-
-logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
 date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
 
 
 class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
+        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
         self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
-    @staticmethod
-    def connect_to_db() -> Client:
+    def connect_to_db(self) -> Client:
         """
         Connecting to clickhouse.
         :return: Client ClickHouse.
@@ -35,15 +33,18 @@ class Receive(RabbitMq):
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             client.query("SET allow_experimental_lightweight_delete=1")
-            logger.info("Success connect to clickhouse")
+            self.logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
-            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             sys.exit(1)
         return client
 
     def read_msg(self):
-        ''' Connecting to a queue and receiving messages '''
-        logger.info('Connect')
+        """
+        Connecting to a queue and receiving messages
+        :return:
+        """
+        self.logger.info('Connect')
         channel, connection = self.connect_rabbit()
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
         channel.queue_declare(queue=self.queue_name,durable=self.durable)
@@ -52,15 +53,31 @@ class Receive(RabbitMq):
         channel.start_consuming()
 
     def callback(self, ch, method, properties, body):
-        ''' Working with the message body'''
+        """
+        Working with the message body
+        :param ch:
+        :param method:
+        :param properties:
+        :param body:
+        :return:
+        """
+        print(
+            f"callback for ch={ch}, method={method}, properties={properties} called"
+        )
         time.sleep(self.time_sleep)
-        logger.info('Get body message')
+        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
+        self.logger.info('Get body message')
         self.save_text_msg(body)
         self.read_json(body)
         DataCoreClient().main()
-        # ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    def save_text_msg(self, msg):
+    @staticmethod
+    def save_text_msg(msg):
+        """
+
+        :param msg:
+        :return:
+        """
         file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/{datetime.now()}-text_msg.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
@@ -69,6 +86,11 @@ class Receive(RabbitMq):
             json.dump(msg.decode('utf-8-sig'), file, indent=4, ensure_ascii=False)
 
     def change_columns(self, data):
+        """
+
+        :param data:
+        :return:
+        """
         voyageDate = data.get('voyageDate')
         if voyageDate is not None:
             data['voyageDate'] = self.convert_format_date(voyageDate)
@@ -91,8 +113,12 @@ class Receive(RabbitMq):
         return date
 
     def read_json(self, msg):
-        ''' Decoding a message and working with data'''
-        logger.info('Read json')
+        """
+        Decoding a message and working with data.
+        :param msg:
+        :return:
+        """
+        self.logger.info('Read json')
         msg = msg.decode('utf-8-sig')
         file_name = f"data_core_{datetime.now()}.json"
         data = json.loads(msg)
@@ -101,7 +127,7 @@ class Receive(RabbitMq):
             self.change_columns(d)
             self.write_to_json(d, n)
         self.db.insert({"len_rows": len(data), "file_name": file_name, "data": data})
-        logger.info(f"Data from the queue is written to the cache. File is {file_name}")
+        self.logger.info(f"Data from the queue is written to the cache. File is {file_name}")
 
     @staticmethod
     def add_new_columns(data, file_name):
@@ -116,8 +142,15 @@ class Receive(RabbitMq):
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    def write_to_json(self, msg, en, dir_name="json"):
-        ''' Write data to json file '''
+    @staticmethod
+    def write_to_json(msg, en, dir_name="json"):
+        """
+        Write data to json file
+        :param msg:
+        :param en:
+        :param dir_name:
+        :return:
+        """
         file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{en}-{datetime.now()}.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
@@ -126,9 +159,13 @@ class Receive(RabbitMq):
             json.dump(msg, file, indent=4, ensure_ascii=False)
 
     def main(self):
-        logger.info('Start read')
+        """
+
+        :return:
+        """
+        self.logger.info('Start read')
         self.read_msg()
-        logger.info('End read')
+        self.logger.info('End read')
 
 
 class DataCoreClient(Receive):
@@ -141,11 +178,13 @@ class DataCoreClient(Receive):
         Counting the number of rows to update transaction data.
         :return:
         """
+        date: str = (datetime.now() - timedelta(days=-1)).strftime('%Y-%m-%d')
+        self.db.remove(self.remove_nested(['data', 'is_obsolete_date'], date))
         all_data_cache: List[Document] = self.db.all()
         while all_data_cache[-1]["len_rows"] != self.client.query(
                 f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{all_data_cache[-1]['file_name']}'"
         ).result_rows[0][0]:
-            logger.info("The data has not yet been uploaded to the database")
+            self.logger.info("The data has not yet been uploaded to the database")
             time.sleep(60)
         return all_data_cache
 
@@ -264,7 +303,7 @@ class DataCoreClient(Receive):
                         FROM datacore_freight
                         WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
                         AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
-        logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
+        self.logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
 
     def delete_deal(self) -> None:
         """
@@ -272,7 +311,7 @@ class DataCoreClient(Receive):
         :return:
         """
         self.client.query("DELETE FROM datacore_freight WHERE is_obsolete=true")
-        logger.info("Successfully deleted old transaction data")
+        self.logger.info("Successfully deleted old transaction data")
 
     def main(self):
         """
