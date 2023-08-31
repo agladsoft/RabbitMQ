@@ -193,6 +193,7 @@ class DataCoreClient(Receive, metaclass=Singleton):
         ).result_rows[0][0]:
             self.logger.info("The data has not yet been uploaded to the database")
             time.sleep(60)
+        self.logger.info("The data has been uploaded to the database")
         return all_data_cache
 
     @staticmethod
@@ -328,6 +329,8 @@ class DataCoreClient(Receive, metaclass=Singleton):
         all_data_cache_: List[Document] = self.get_all_data_db_accord_last_data()
         for data_cache in all_data_cache_:
             if any(data["is_obsolete"] is None for data in data_cache["data"]):
+                self.logger.info(f"From this queue, you need to update the values. File name is "
+                                 f"{data_cache['file_name']}")
                 self.update_status(data_cache, all_data_cache_)
         self.delete_data_from_cache()
 
