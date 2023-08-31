@@ -4,11 +4,11 @@ import uuid
 import json
 import contextlib
 from app_logger import *
-from tinydb import Query
 from pathlib import Path
-from tinydb import TinyDB
+from itertools import groupby
 from __init__ import RabbitMq
 from typing import List, Union
+from tinydb import TinyDB, Query
 from tinydb.table import Document
 from datetime import datetime, timedelta
 from clickhouse_connect import get_client
@@ -108,17 +108,19 @@ class Receive(RabbitMq):
         msg = msg.decode('utf-8-sig')
         file_name = f"data_core_{datetime.now()}.json"
         data = json.loads(msg)
+        len_rows = len(data)
         for n, d in enumerate(data):
-            self.add_new_columns(d, file_name)
+            self.add_new_columns(len_rows, d, file_name)
+            self.db.insert(d)
             self.change_columns(d)
             self.write_to_json(d, n)
-        self.db.insert({"len_rows": len(data), "file_name": file_name, "data": data})
         self.logger.info(f"Data from the queue is written to the cache. File is {file_name}")
 
     @staticmethod
-    def add_new_columns(data, file_name):
+    def add_new_columns(len_rows, data, file_name):
         """
         Adding new columns.
+        :param len_rows:
         :param data:
         :param file_name:
         :return:
@@ -127,6 +129,7 @@ class Receive(RabbitMq):
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        data['len_rows'] = len_rows
 
     @staticmethod
     def write_to_json(msg, en, dir_name="json"):
@@ -189,10 +192,12 @@ class DataCoreClient(Receive, metaclass=Singleton):
         """
         all_data_cache: List[Document] = self.db.all()
         while all_data_cache[-1]["len_rows"] != self.client.query(
-                f"SELECT count(*) FROM datacore_freight WHERE original_file_parsed_on='{all_data_cache[-1]['file_name']}'"
+                f"SELECT count(*) FROM datacore_freight "
+                f"WHERE original_file_parsed_on='{all_data_cache[-1]['original_file_parsed_on']}'"
         ).result_rows[0][0]:
             self.logger.info("The data has not yet been uploaded to the database")
-            time.sleep(60)
+            time.sleep(1)
+            break
         self.logger.info("The data has been uploaded to the database")
         return all_data_cache
 
@@ -228,10 +233,11 @@ class DataCoreClient(Receive, metaclass=Singleton):
         row["is_obsolete"] = is_obsolete
         row['is_obsolete_date'] = date_now
 
-    def write_updated_data(self, query: str, data_cache: Union[Document, list], is_obsolete: bool) -> None:
+    def write_updated_data(self, query: str, query_cache: Query, data_cache: dict, is_obsolete: bool) -> None:
         """
         Writing updated data to a json-file.
         :param query: ClickHouse Client.
+        :param query_cache:
         :param data_cache: Data from cache.
         :param is_obsolete: Setting the value of is_obsolete.
         :return:
@@ -241,29 +247,29 @@ class DataCoreClient(Receive, metaclass=Singleton):
             return
         date_now: str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if not is_obsolete:
-            for index, row in enumerate(data_cache["data"]):
+            for index, (row, row_db) in enumerate(zip(data_cache["data"], data_db)):
                 self.change_values(is_obsolete, row, date_now)
                 self.write_to_json(row, index, dir_name="update")
+                self.update_cache(query_cache, row_db, is_obsolete, date_now)
         else:
-            for all_data_cache in data_cache:
-                for index, row in enumerate(all_data_cache["data"]):
-                    for row_db in data_db:
-                        if row["uuid"] == str(row_db[0]):
-                            self.change_values(is_obsolete, row, date_now)
-                            self.write_to_json(row, index, dir_name="update")
-        self.update_cache(data_db, is_obsolete, date_now)
+            for index, row in enumerate(data_cache):
+                for row_db in data_db:
+                    if row["uuid"] == str(row_db[0]):
+                        self.change_values(is_obsolete, row, date_now)
+                        self.write_to_json(row, index, dir_name="update")
+                        self.update_cache(query_cache, row_db, is_obsolete, date_now)
 
-    def update_cache(self, data_db: Sequence, is_obsolete: bool, date_now: str) -> None:
+    def update_cache(self, query_cache: Query, row_db: Sequence, is_obsolete: bool, date_now: str) -> None:
         """
         Updating data from the cache.
-        :param data_db: Data from the database.
+        :param query_cache:
+        :param row_db: Data from the database.
         :param is_obsolete: Setting the value of is_obsolete.
         :param date_now: write in cache datetime now.
         :return:
         """
-        for row in data_db:
-            self.db.update(self._set_nested(['data', 'is_obsolete'], is_obsolete, str(row[0])))
-            self.db.update(self._set_nested(['data', 'is_obsolete_date'], date_now, str(row[0])))
+        self.db.update({"is_obsolete": is_obsolete}, query_cache.uuid == str(row_db[0]))
+        self.db.update({"is_obsolete_date": date_now}, query_cache.uuid == str(row_db[0]))
 
     def _remove_nested(self, path: list, condition: str):
         """
@@ -287,15 +293,15 @@ class DataCoreClient(Receive, metaclass=Singleton):
 
         return transform
 
-    def delete_data_from_cache(self) -> None:
+    def delete_data_from_cache(self, query_cache: Query) -> None:
         """
         Deleting data from the cache by date.
         :return:
         """
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        self.db.remove(self._remove_nested(['data', 'is_obsolete_date'], date))
+        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete is True)
 
-    def update_status(self, data_cache: Document, all_data_cache) -> None:
+    def update_status(self, query_cache: Query, data_cache: dict, all_data_cache) -> None:
         """
         Updating the transaction by parameters.
         :return:
@@ -303,14 +309,14 @@ class DataCoreClient(Receive, metaclass=Singleton):
         self.write_updated_data("""
             SELECT *
             FROM datacore_freight
-            WHERE is_obsolete is NULL""", data_cache, is_obsolete=False)
+            WHERE is_obsolete is NULL""", query_cache, data_cache, is_obsolete=False)
 
         group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data_cache["data"]}.values())
         for item in group_list:
             self.write_updated_data(f"""SELECT *
                         FROM datacore_freight
                         WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
-                        AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
+                        AND orderNumber='{item['orderNumber']}'""", query_cache, all_data_cache, is_obsolete=True)
         self.logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
 
     def delete_deal(self) -> None:
@@ -327,12 +333,16 @@ class DataCoreClient(Receive, metaclass=Singleton):
         :return:
         """
         all_data_cache_: List[Document] = self.get_all_data_db_accord_last_data()
-        for data_cache in all_data_cache_:
-            if any(data["is_obsolete"] is None for data in data_cache["data"]):
+        dict_group_by_data = {}
+        query_cache: Query = Query()
+        for file_name, data in groupby(all_data_cache_, key=lambda x: x['original_file_parsed_on']):
+            dict_group_by_data["file_name"] = file_name
+            dict_group_by_data["data"] = list(data)
+            if any(data["is_obsolete"] is None for data in dict_group_by_data["data"]):
                 self.logger.info(f"From this queue, you need to update the values. File name is "
-                                 f"{data_cache['file_name']}")
-                self.update_status(data_cache, all_data_cache_)
-        self.delete_data_from_cache()
+                                 f"{dict_group_by_data['file_name']}")
+                self.update_status(query_cache, dict_group_by_data, all_data_cache_)
+        self.delete_data_from_cache(query_cache)
 
     def __del__(self):
         self.client.close()
