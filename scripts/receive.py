@@ -54,6 +54,7 @@ class Receive(RabbitMq):
         dat_core_client: DataCoreClient = DataCoreClient()
         dat_core_client.main()
         del dat_core_client
+        self.logger.info("The data from the queue was processed by the script")
 
 
     @staticmethod
@@ -332,6 +333,7 @@ class DataCoreClient(Receive, metaclass=Singleton):
 
     def __del__(self):
         self.client.close()
+        self.logger.info("Success disconnect clickhouse")
 
 
 if __name__ == '__main__':
