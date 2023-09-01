@@ -160,15 +160,7 @@ class Receive(RabbitMq):
         self.logger.info('End read')
 
 
-class Singleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in Singleton._instances:
-            Singleton._instances[cls] = super().__call__(*args, **kwargs)
-        return Singleton._instances[cls]
-
-
-class DataCoreClient(Receive, metaclass=Singleton):
+class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
         self.client: Client = self.connect_to_db()
