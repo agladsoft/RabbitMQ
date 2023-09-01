@@ -196,8 +196,7 @@ class DataCoreClient(Receive, metaclass=Singleton):
                 f"WHERE original_file_parsed_on='{all_data_cache[-1]['original_file_parsed_on']}'"
         ).result_rows[0][0]:
             self.logger.info("The data has not yet been uploaded to the database")
-            time.sleep(1)
-            break
+            time.sleep(60)
         self.logger.info("The data has been uploaded to the database")
         return all_data_cache
 
