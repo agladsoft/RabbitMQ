@@ -11,9 +11,11 @@ from itertools import groupby
 from __init__ import RabbitMq
 from tinydb import TinyDB, Query
 from tinydb.table import Document
+from tinydb.storages import JSONStorage
 from datetime import datetime, timedelta
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
+from tinydb.middlewares import CachingMiddleware
 from clickhouse_connect.driverc.dataconv import Sequence
 
 date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
@@ -23,7 +25,8 @@ class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
-        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
+        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False,
+                                 storage=CachingMiddleware(JSONStorage))
 
     def read_msg(self):
         """
@@ -54,7 +57,6 @@ class Receive(RabbitMq):
         self.read_json(body)
         dat_core_client: DataCoreClient = DataCoreClient()
         dat_core_client.main()
-        del dat_core_client
         self.logger.info("The data from the queue was processed by the script")
 
 
@@ -301,9 +303,13 @@ class DataCoreClient(Receive, metaclass=Singleton):
                 self.update_status(dict_group_by_data, all_data_cache_)
         self.delete_data_from_cache(query_cache)
 
-    def __del__(self):
-        self.client.close()
-        self.logger.info("Success disconnect clickhouse")
+    def __exit__(self, exception_type, exception_val, trace):
+        try:
+            self.client.close()
+            self.logger.info("Success disconnect clickhouse")
+        except AttributeError:  # isn't closable
+            self.logger.info("Not closable")
+            return True
 
 
 if __name__ == '__main__':
