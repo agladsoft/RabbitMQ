@@ -11,11 +11,9 @@ from itertools import groupby
 from __init__ import RabbitMq
 from tinydb import TinyDB, Query
 from tinydb.table import Document
-from tinydb.storages import JSONStorage
 from datetime import datetime, timedelta
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from tinydb.middlewares import CachingMiddleware
 from clickhouse_connect.driverc.dataconv import Sequence
 
 date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
@@ -25,8 +23,7 @@ class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
-        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False,
-                                 storage=CachingMiddleware(JSONStorage))
+        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
     def read_msg(self):
         """
