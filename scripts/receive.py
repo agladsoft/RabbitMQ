@@ -111,9 +111,9 @@ class Receive(RabbitMq):
         len_rows = len(data)
         for n, d in enumerate(data):
             self.add_new_columns(len_rows, d, file_name)
-            self.db.insert(d)
             self.change_columns(d)
             self.write_to_json(d, n)
+        self.db.insert_multiple(iter(data))
         self.logger.info(f"Data from the queue is written to the cache. File is {file_name}")
 
     @staticmethod
