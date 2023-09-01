@@ -17,7 +17,7 @@ class RabbitMq:
         parameters = pika.ConnectionParameters(self.host,
                                                5672,
                                                '/',
-                                               credentials)
+                                               credentials, heartbeat=10)
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         return channel, connection
