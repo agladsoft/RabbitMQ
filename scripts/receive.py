@@ -299,7 +299,7 @@ class DataCoreClient(Receive, metaclass=Singleton):
         :return:
         """
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete is True)
+        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete == True)
 
     def update_status(self, query_cache: Query, data_cache: dict, all_data_cache) -> None:
         """
