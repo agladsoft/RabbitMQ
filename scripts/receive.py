@@ -30,13 +30,16 @@ class Receive(RabbitMq):
         Connecting to a queue and receiving messages
         :return:
         """
-        self.logger.info('Connect')
+        self.logger.info('The script has started working')
         channel, connection = self.connect_rabbit()
+        self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
         channel.queue_declare(queue=self.queue_name,durable=self.durable)
         channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
         channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=True)
+        self.logger.info("Start consuming")
         channel.start_consuming()
+        self.logger.info('The script has completed working')
 
     def callback(self, ch, method, properties, body):
         """
@@ -48,13 +51,13 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
-        self.logger.info(f"Callback for ch={ch}, method={method}, properties={properties} and body_message called")
+        self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties} and body_message called")
         time.sleep(self.time_sleep)
         self.save_text_msg(body)
         self.read_json(body)
         dat_core_client: DataCoreClient = DataCoreClient()
         dat_core_client.main()
-        self.logger.info("The data from the queue was processed by the script")
+        self.logger.info("Callback exit. The data from the queue was processed by the script")
 
 
     @staticmethod
@@ -146,15 +149,6 @@ class Receive(RabbitMq):
             os.makedirs(os.path.dirname(fle))
         with open(file_name, 'w') as file:
             json.dump(msg, file, indent=4, ensure_ascii=False)
-
-    def main(self):
-        """
-
-        :return:
-        """
-        self.logger.info('Start read')
-        self.read_msg()
-        self.logger.info('End read')
 
 
 class DataCoreClient(Receive):
@@ -302,4 +296,4 @@ class DataCoreClient(Receive):
 
 
 if __name__ == '__main__':
-    Receive().main()
+    Receive().read_msg()
