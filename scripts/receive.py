@@ -256,7 +256,7 @@ class DataCoreClient(Receive):
         :return:
         """
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete is True)
+        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete == True)
 
     def update_status(self, data_cache: dict, all_data_cache) -> None:
         """
@@ -290,7 +290,7 @@ class DataCoreClient(Receive):
         :return:
         """
         all_data_cache_: List[Document] = self.get_all_data_db_accord_last_data()
-        dict_group_by_data = {}
+        dict_group_by_data: dict = {}
         query_cache: Query = Query()
         for file_name, data in groupby(all_data_cache_, key=lambda x: x['original_file_parsed_on']):
             dict_group_by_data["file_name"] = file_name
