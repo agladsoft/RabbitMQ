@@ -32,7 +32,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg()
+        self.read_text_msg(do_read_file=True)
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -43,7 +43,7 @@ class Receive(RabbitMq):
         channel.start_consuming()
         self.logger.info('The script has completed working')
 
-    def read_text_msg(self, do_read_file=True):
+    def read_text_msg(self, do_read_file=False):
         """
 
         :param do_read_file:
@@ -51,7 +51,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-09-11 11:34:01.982863-text_msg.json", 'r') as file:
+                      f"2023-09-11 06:17:29.062551-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch, method, properties, body):
