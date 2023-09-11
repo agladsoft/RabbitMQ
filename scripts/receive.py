@@ -70,10 +70,11 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/{datetime.now()}-text_msg.json"
         fle: Path = Path(file_name)
+        json_msg = json.loads(msg.decode('utf8'))
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
         with open(file_name, 'w') as file:
-            json.dump(msg.decode('utf-8-sig'), file, indent=4, ensure_ascii=False)
+            json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
     def change_columns(self, data):
         """
