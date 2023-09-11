@@ -22,7 +22,8 @@ date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
 class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
-        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
+        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
+                                                    + str(datetime.now().date()))
         self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
     def read_msg(self):
@@ -34,7 +35,7 @@ class Receive(RabbitMq):
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
-        channel.queue_declare(queue=self.queue_name,durable=self.durable)
+        channel.queue_declare(queue=self.queue_name, durable=self.durable)
         channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
         channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=True)
         self.logger.info("Start consuming")
@@ -50,15 +51,15 @@ class Receive(RabbitMq):
         :param body:
         :return:
         """
-        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_") + str(datetime.now().date()))
-        self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties} and body_message called")
+        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
+                                                    + str(datetime.now().date()))
+        self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called")
         time.sleep(self.time_sleep)
         self.save_text_msg(body)
         self.read_json(body)
         dat_core_client: DataCoreClient = DataCoreClient()
         dat_core_client.main()
         self.logger.info("Callback exit. The data from the queue was processed by the script")
-
 
     @staticmethod
     def save_text_msg(msg):
@@ -81,19 +82,19 @@ class Receive(RabbitMq):
         :return:
         """
         voyageDate = data.get('voyageDate')
-        if voyageDate is not None:
-            data['voyageDate'] = self.convert_format_date(voyageDate)
+        operationDate = data.get('operationDate')
         containerCount = data.get('containerCount')
-        if containerCount is not None:
-            data['containerCount'] = int(containerCount)
         containerSize = data.get('containerSize')
-        if containerSize is not None:
-            data['containerSize'] = int(containerSize)
-
+        operationMonth = data.get('operationMonth')
+        data['voyageDate'] = self.convert_format_date(voyageDate) if voyageDate else None
+        data['operationDate'] = self.convert_format_date(operationDate) if operationDate else None
+        data['containerCount'] = int(containerCount) if containerCount else None
+        data['containerSize'] = int(containerSize) if containerSize else None
+        data['operationMonth'] = int(operationMonth) if operationMonth else None
 
     @staticmethod
     def convert_format_date(date: str) -> str:
-        """
+        """operationMonth
         Convert to a date type.
         """
         for date_format in date_formats:
@@ -241,7 +242,7 @@ class DataCoreClient(Receive):
         :return:
         """
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete == True)
+        self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete is True)
 
     def update_status(self, data_cache: dict, all_data_cache) -> None:
         """
