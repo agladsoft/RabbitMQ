@@ -32,6 +32,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
+        self.read_text_msg()
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -41,6 +42,17 @@ class Receive(RabbitMq):
         self.logger.info("Start consuming")
         channel.start_consuming()
         self.logger.info('The script has completed working')
+
+    def read_text_msg(self, do_read_file=True):
+        """
+
+        :param do_read_file:
+        :return:
+        """
+        if do_read_file:
+            with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
+                      f"2023-09-11 11:34:01.982863-text_msg.json", 'r') as file:
+                self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch, method, properties, body):
         """
@@ -68,13 +80,14 @@ class Receive(RabbitMq):
         :param msg:
         :return:
         """
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/{datetime.now()}-text_msg.json"
-        fle: Path = Path(file_name)
-        json_msg = json.loads(msg.decode('utf8'))
-        if not os.path.exists(os.path.dirname(fle)):
-            os.makedirs(os.path.dirname(fle))
-        with open(file_name, 'w') as file:
-            json.dump(json_msg, file, indent=4, ensure_ascii=False)
+        if isinstance(msg, (bytes, bytearray)):
+            file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/{datetime.now()}-text_msg.json"
+            fle: Path = Path(file_name)
+            json_msg = json.loads(msg.decode('utf8'))
+            if not os.path.exists(os.path.dirname(fle)):
+                os.makedirs(os.path.dirname(fle))
+            with open(file_name, 'w') as file:
+                json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
     def change_columns(self, data):
         """
@@ -110,9 +123,9 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('Read json')
-        msg = msg.decode('utf-8-sig')
+        msg = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         file_name = f"data_core_{datetime.now()}.json"
-        data = json.loads(msg)
+        data = json.loads(msg) if isinstance(msg, str) else msg
         len_rows = len(data)
         for n, d in enumerate(data):
             self.add_new_columns(len_rows, d, file_name)
