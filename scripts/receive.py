@@ -32,7 +32,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg(do_read_file=True)
+        self.read_text_msg()
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -51,7 +51,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-09-11 06:17:29.062551-text_msg.json", 'r') as file:
+                      f"2023-09-11 11:34:01.982863-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch, method, properties, body):
@@ -116,6 +116,17 @@ class Receive(RabbitMq):
                 return str(datetime.strptime(date, date_format).date())
         return date
 
+    def parse_data(self, data):
+        file_name = f"data_core_{datetime.now()}.json"
+        len_rows = len(data)
+        for n, d in enumerate(data):
+            # if len(d) != 24:
+            #     raise ValueError(f"The number of columns does not match in {d}")
+            self.add_new_columns(len_rows, d, file_name)
+            self.change_columns(d)
+            self.write_to_json(d, n)
+        return file_name
+
     def read_json(self, msg):
         """
         Decoding a message and working with data.
@@ -124,13 +135,8 @@ class Receive(RabbitMq):
         """
         self.logger.info('Read json')
         msg = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
-        file_name = f"data_core_{datetime.now()}.json"
         data = json.loads(msg) if isinstance(msg, str) else msg
-        len_rows = len(data)
-        for n, d in enumerate(data):
-            self.add_new_columns(len_rows, d, file_name)
-            self.change_columns(d)
-            self.write_to_json(d, n)
+        file_name = self.parse_data(data)
         self.db.insert_multiple(iter(data))
         self.logger.info(f"Data from the queue is written to the cache. File is {file_name}")
 
