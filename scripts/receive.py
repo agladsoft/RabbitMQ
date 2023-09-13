@@ -119,12 +119,12 @@ class Receive(RabbitMq):
     def parse_data(self, data):
         file_name = f"data_core_{datetime.now()}.json"
         len_rows = len(data)
-        for n, d in enumerate(data):
+        for d in data:
             # if len(d) != 24:
             #     raise ValueError(f"The number of columns does not match in {d}")
             self.add_new_columns(len_rows, d, file_name)
             self.change_columns(d)
-            self.write_to_json(d, n)
+        self.write_to_json(data)
         return file_name
 
     def read_json(self, msg):
@@ -156,7 +156,7 @@ class Receive(RabbitMq):
         data['len_rows'] = len_rows
 
     @staticmethod
-    def write_to_json(msg, en, dir_name="json"):
+    def write_to_json(msg, dir_name="json"):
         """
         Write data to json file
         :param msg:
@@ -164,7 +164,7 @@ class Receive(RabbitMq):
         :param dir_name:
         :return:
         """
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{en}-{datetime.now()}.json"
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now()}.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
