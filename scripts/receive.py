@@ -51,7 +51,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-09-11 11:34:01.982863-text_msg.json", 'r') as file:
+                      f"2023-09-11 06:17:29.062551-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch, method, properties, body):
