@@ -160,7 +160,6 @@ class Receive(RabbitMq):
         """
         Write data to json file
         :param msg:
-        :param en:
         :param dir_name:
         :return:
         """
@@ -232,15 +231,15 @@ class DataCoreClient(Receive):
             return
         date_now: str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if not is_obsolete:
-            for index, (row, row_db) in enumerate(zip(data_cache["data"], data_db)):
+            for row, row_db in zip(data_cache["data"], data_db):
                 self.change_values(is_obsolete, row, date_now)
-                self.write_to_json(row, index, dir_name="update")
+            self.write_to_json(data_cache["data"], dir_name="update")
         else:
-            for index, row in enumerate(data_cache):
+            for row in data_cache:
                 for row_db in data_db:
                     if row["uuid"] == str(row_db[0]):
                         self.change_values(is_obsolete, row, date_now)
-                        self.write_to_json(row, index, dir_name="update")
+            self.write_to_json(data_cache, dir_name="update")
         self.update_cache(data_db, is_obsolete, date_now)
 
     def update_cache(self, row_db: Sequence, is_obsolete: bool, date_now: str) -> None:
