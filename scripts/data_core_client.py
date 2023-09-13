@@ -94,16 +94,16 @@ class DataCoreClient(Receive):
             return
         date_now: str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if not is_obsolete:
-            for index, row in enumerate(data_cache["data"]):
+            for row in data_cache["data"]:
                 self.change_values(is_obsolete, row, date_now)
-                self.write_to_json(row, index, dir_name="update")
+            self.write_to_json(data_cache["data"], dir_name="update")
         else:
             for all_data_cache in data_cache:
-                for index, row in enumerate(all_data_cache["data"]):
+                for row in all_data_cache["data"]:
                     for row_db in data_db:
                         if row["uuid"] == str(row_db[0]):
                             self.change_values(is_obsolete, row, date_now)
-                            self.write_to_json(row, index, dir_name="update")
+                self.write_to_json(all_data_cache["data"], dir_name="update")
         self.update_cache(data_db, is_obsolete, date_now)
 
     def update_cache(self, data_db: Sequence, is_obsolete: bool, date_now: str) -> None:
