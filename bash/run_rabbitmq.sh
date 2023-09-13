@@ -8,3 +8,4 @@ do
 	  sleep 3600
 	  python3 ${XL_IDP_ROOT_RABBITMQ}/scripts/receive.py
 done
+

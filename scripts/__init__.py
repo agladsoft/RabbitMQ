@@ -21,3 +21,4 @@ class RabbitMq:
         channel = connection.channel()
         return channel, connection
 
+

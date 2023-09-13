@@ -85,3 +85,4 @@ class Receive(RabbitMq):
 
 if __name__ == '__main__':
     Receive().main()
+
