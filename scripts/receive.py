@@ -91,7 +91,7 @@ class Receive(RabbitMq):
 
     def change_columns(self, data):
         """
-
+        Changes columns in data.
         :param data:
         :return:
         """
