@@ -264,24 +264,22 @@ class DataCoreClient(Receive):
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete == True)
 
-    def update_status(self, data_cache: dict) -> None:
+    def update_status(self, data_cache: dict, all_data_cache) -> None:
         """
         Updating the transaction by parameters.
         :return:
         """
-        self.client.query(f"""
-            ALTER TABLE datacore_freight
-            UPDATE is_obsolete=false
-            WHERE original_file_parsed_on='{data_cache['file_name']}'
-        """)
+        self.write_updated_data("""
+            SELECT *
+            FROM datacore_freight
+            WHERE is_obsolete is NULL""", data_cache, is_obsolete=False)
 
         group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data_cache["data"]}.values())
         for item in group_list:
-            self.client.query(f"""ALTER TABLE datacore_freight 
-                            UPDATE is_obsolete=true
-                            WHERE original_file_parsed_on != '{data_cache['file_name']}' 
-                            AND is_obsolete=false 
-                            AND orderNumber='{item['orderNumber']}'""")
+            self.write_updated_data(f"""SELECT *
+                        FROM datacore_freight
+                        WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
+                        AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
         self.logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
 
     def delete_deal(self) -> None:
@@ -306,7 +304,7 @@ class DataCoreClient(Receive):
             if any(data["is_obsolete"] is None for data in dict_group_by_data["data"]):
                 self.logger.info(f"From this queue, you need to update the values. File name is "
                                  f"{dict_group_by_data['file_name']}")
-                self.update_status(dict_group_by_data)
+                self.update_status(dict_group_by_data, all_data_cache_)
         self.delete_data_from_cache(query_cache)
 
     def __exit__(self, exception_type, exception_val, trace):
