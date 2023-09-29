@@ -221,30 +221,6 @@ class DataCoreClient(Receive):
         row["is_obsolete"] = is_obsolete
         row['is_obsolete_date'] = date_now
 
-    def write_updated_data(self, query: str, data_cache: dict, is_obsolete: bool) -> None:
-        """
-        Writing updated data to a json-file.
-        :param query: ClickHouse Client.
-        :param data_cache: Data from cache.
-        :param is_obsolete: Setting the value of is_obsolete.
-        :return:
-        """
-        data_db: Sequence = self.client.query(query).result_rows
-        if not data_db:
-            return
-        date_now: str = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        if not is_obsolete:
-            for row, row_db in zip(data_cache["data"], data_db):
-                self.change_values(is_obsolete, row, date_now)
-            self.write_to_json(data_cache["data"], dir_name="update")
-        else:
-            for row in data_cache:
-                for row_db in data_db:
-                    if row["uuid"] == str(row_db[0]):
-                        self.change_values(is_obsolete, row, date_now)
-            self.write_to_json(data_cache, dir_name="update")
-        self.update_cache(data_db, is_obsolete, date_now)
-
     def update_cache(self, row_db: Sequence, is_obsolete: bool, date_now: str) -> None:
         """
         Updating data from the cache.
@@ -266,22 +242,24 @@ class DataCoreClient(Receive):
         date: str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         self.db.remove(date > query_cache.is_obsolete_date and query_cache.is_obsolete == True)
 
-    def update_status(self, data_cache: dict, all_data_cache) -> None:
+    def update_status(self, data_cache: dict) -> None:
         """
         Updating the transaction by parameters.
         :return:
         """
-        self.write_updated_data("""
-            SELECT *
-            FROM datacore_freight
-            WHERE is_obsolete is NULL""", data_cache, is_obsolete=False)
+        self.client.query(f"""
+            ALTER TABLE datacore_freight
+            UPDATE is_obsolete=false
+            WHERE original_file_parsed_on='{data_cache['file_name']}'
+        """)
 
         group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data_cache["data"]}.values())
         for item in group_list:
-            self.write_updated_data(f"""SELECT *
-                        FROM datacore_freight
-                        WHERE original_file_parsed_on != '{data_cache['file_name']}' AND is_obsolete=false 
-                        AND orderNumber='{item['orderNumber']}'""", all_data_cache, is_obsolete=True)
+            self.client.query(f"""ALTER TABLE datacore_freight 
+                            UPDATE is_obsolete=true
+                            WHERE original_file_parsed_on != '{data_cache['file_name']}' 
+                            AND is_obsolete=false 
+                            AND orderNumber='{item['orderNumber']}'""")
         self.logger.info(f"Success updated `is_obsolete` key. File name is {data_cache['file_name']}.")
 
     def delete_deal(self) -> None:
@@ -306,7 +284,7 @@ class DataCoreClient(Receive):
             if any(data["is_obsolete"] is None for data in dict_group_by_data["data"]):
                 self.logger.info(f"From this queue, you need to update the values. File name is "
                                  f"{dict_group_by_data['file_name']}")
-                self.update_status(dict_group_by_data, all_data_cache_)
+                self.update_status(dict_group_by_data)
         self.delete_data_from_cache(query_cache)
 
     def __exit__(self, exception_type, exception_val, trace):
