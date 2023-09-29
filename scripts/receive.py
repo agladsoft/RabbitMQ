@@ -5,7 +5,6 @@ import json
 import contextlib
 from app_logger import *
 from pathlib import Path
-from tinydb import TinyDB
 from __init__ import RabbitMq
 from datetime import datetime
 from clickhouse_connect import get_client
