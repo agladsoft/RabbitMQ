@@ -16,7 +16,7 @@ from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from clickhouse_connect.driverc.dataconv import Sequence
 
-date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z")
+date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%d.%m.%Y %H:%M:%S")
 
 
 class Receive(RabbitMq):
@@ -105,7 +105,8 @@ class Receive(RabbitMq):
         data['operationDate'] = self.convert_format_date(operationDate) if operationDate else None
         data['containerCount'] = int(containerCount) if containerCount else None
         data['containerSize'] = int(containerSize) if containerSize else None
-        data['voyageMonth'] = int(voyageMonth) if voyageMonth else None
+        data['voyageMonth'] = datetime.strptime(self.convert_format_date(voyageMonth), "%Y-%m-%d").month \
+            if voyageMonth else None
         data['operationMonth'] = int(operationMonth) if operationMonth else None
         data['booking_list'] = data.get('bl')
 
