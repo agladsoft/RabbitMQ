@@ -19,7 +19,6 @@ class Receive(RabbitMq):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                     + str(datetime.now().date()))
-        self.db: TinyDB = TinyDB(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/db.json", indent=4, ensure_ascii=False)
 
     def read_msg(self):
         """
