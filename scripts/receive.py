@@ -32,7 +32,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg()
+        self.read_text_msg(do_read_file=True)
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -51,7 +51,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-09-11 06:17:29.062551-text_msg.json", 'r') as file:
+                      f"2023-09-29 07:31:00.944115-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch, method, properties, body):
@@ -99,11 +99,13 @@ class Receive(RabbitMq):
         operationDate = data.get('operationDate')
         containerCount = data.get('containerCount')
         containerSize = data.get('containerSize')
+        voyageMonth = data.get('voyageMonth')
         operationMonth = data.get('operationMonth')
         data['voyageDate'] = self.convert_format_date(voyageDate) if voyageDate else None
         data['operationDate'] = self.convert_format_date(operationDate) if operationDate else None
         data['containerCount'] = int(containerCount) if containerCount else None
         data['containerSize'] = int(containerSize) if containerSize else None
+        data['voyageMonth'] = int(voyageMonth) if voyageMonth else None
         data['operationMonth'] = int(operationMonth) if operationMonth else None
         data['booking_list'] = data.get('bl')
 
