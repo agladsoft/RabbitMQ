@@ -210,12 +210,14 @@ class DataCoreClient(Receive):
                     UPDATE is_obsolete=false
                     WHERE original_file_parsed_on='{file_name}'
                 """)
+        self.logger.info("Success updated `is_obsolete` key on `False`")
         group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data}.values())
         for item in group_list:
             self.client.query(f"""ALTER TABLE datacore_freight 
                         UPDATE is_obsolete=true
                         WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
                         AND orderNumber='{item['orderNumber']}'""")
+            self.logger.info("Success updated `is_obsolete` key on `True`")
         self.logger.info("Success updated `is_obsolete` key")
 
     def delete_deal(self) -> None:
