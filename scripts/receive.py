@@ -262,7 +262,7 @@ class DataCoreFreight(DataCoreClient):
         data['booking_list'] = data.get('bl')
 
 
-class DataCoreSegment(DataCoreClient):
+class DataCoreSegment(DataCoreFreight):
     def __init__(self):
         super().__init__()
 
@@ -284,7 +284,7 @@ class DataCoreSegment(DataCoreClient):
         data['Date'] = self.convert_format_date(date) if date else None
 
 
-class CounterParties(DataCoreClient):
+class CounterParties(DataCoreFreight):
     def __init__(self):
         super().__init__()
 
@@ -292,8 +292,7 @@ class CounterParties(DataCoreClient):
     def table(self):
         return self.table
 
-    @staticmethod
-    def change_columns(data: dict) -> None:
+    def change_columns(self, data: dict) -> None:
         """
         Changes columns in data.
         :param data:
