@@ -91,6 +91,9 @@ class Receive(RabbitMq):
                 return str(datetime.strptime(date, date_format).date())
         return date
 
+    def change_columns(self, data: dict) -> None:
+        pass
+
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         file_name: str = f"data_core_{datetime.now()}.json"
         len_rows: int = len(data)
@@ -119,8 +122,9 @@ class Receive(RabbitMq):
             LIST_TABLES[1]: DataCoreFreight,
             LIST_TABLES[2]: DataCoreSegment
         }
-        data_core_client: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
-        data_core: Any = data_core_client(eng_table_name)
+        data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
+        data_core.table = eng_table_name
+        data_core: Any = data_core()
         file_name: str = self.parse_data(data, data_core, eng_table_name)
         return data, file_name, data_core
 
@@ -159,7 +163,14 @@ class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
         self.client: Client = self.connect_to_db()
-        self.table = None
+
+    @property
+    def table(self):
+        raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
+
+    @table.setter
+    def table(self, table: str):
+        self.table: str = table
 
     def connect_to_db(self) -> Client:
         """
@@ -227,9 +238,12 @@ class DataCoreClient(Receive):
 
 
 class DataCoreFreight(DataCoreClient):
-    def __init__(self, table: str):
+    def __init__(self):
         super().__init__()
-        self.table = table
+
+    @property
+    def table(self):
+        return self.table
 
     def change_columns(self, data: dict) -> None:
         """
@@ -254,9 +268,12 @@ class DataCoreFreight(DataCoreClient):
 
 
 class DataCoreSegment(DataCoreClient):
-    def __init__(self, table: str):
+    def __init__(self):
         super().__init__()
-        self.table: str = table
+
+    @property
+    def table(self):
+        return self.table
 
     def change_columns(self, data: dict) -> None:
         """
@@ -273,12 +290,14 @@ class DataCoreSegment(DataCoreClient):
 
 
 class CounterParties(DataCoreClient):
-    def __init__(self, table: str):
+    def __init__(self):
         super().__init__()
-        self.table: str = table
 
-    @staticmethod
-    def change_columns(data: dict) -> None:
+    @property
+    def table(self):
+        return self.table
+
+    def change_columns(self, data: dict) -> None:
         """
         Changes columns in data.
         :param data:
