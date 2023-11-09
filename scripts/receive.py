@@ -25,7 +25,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg(do_read_file=True)
+        self.read_text_msg()
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
