@@ -172,6 +172,10 @@ class DataCoreClient(Receive):
     def table(self, table: str):
         self.table: str = table
 
+    @property
+    def deal(self):
+        raise NotImplementedError(f'Define deal in {self.__class__.__name__}.')
+
     def connect_to_db(self) -> Client:
         """
         Connecting to clickhouse.
@@ -211,12 +215,12 @@ class DataCoreClient(Receive):
                     WHERE original_file_parsed_on='{file_name}'
                 """)
         self.logger.info("Success updated `is_obsolete` key on `False`")
-        group_list: list = list({dictionary['orderNumber']: dictionary for dictionary in data}.values())
+        group_list: list = list({dictionary[self.deal]: dictionary for dictionary in data}.values())
         for item in group_list:
             self.client.query(f"""ALTER TABLE {self.table} 
                         UPDATE is_obsolete=true
                         WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
-                        AND orderNumber='{item['orderNumber']}'""")
+                        AND {self.deal}='{item[self.deal]}'""")
         self.logger.info("Success updated `is_obsolete` key")
 
     def delete_deal(self) -> None:
@@ -243,6 +247,10 @@ class DataCoreFreight(DataCoreClient):
     @property
     def table(self):
         return self.table
+
+    @property
+    def deal(self):
+        return "orderNumber"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -274,6 +282,10 @@ class DataCoreSegment(DataCoreClient):
     def table(self):
         return self.table
 
+    @property
+    def deal(self):
+        return "orderNumber"
+
     def change_columns(self, data: dict) -> None:
         """
         Changes columns in data.
@@ -295,6 +307,10 @@ class CounterParties(DataCoreClient):
     @property
     def table(self):
         return self.table
+
+    @property
+    def deal(self):
+        return "rc_uid"
 
     def change_columns(self, data: dict) -> None:
         """
