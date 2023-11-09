@@ -4,8 +4,24 @@ from dotenv import load_dotenv
 
 
 load_dotenv()
-_log_format: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
-_dateftm: str = "%d/%B/%Y %H:%M:%S"
+
+LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
+DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
+
+LIST_TABLES = [
+    "counterparties",
+    "datacore_freight",
+    "datacore_segment"
+]
+
+TABLE_NAMES: dict = {
+    "СписокКонтрагентов": LIST_TABLES[0],
+    "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту": LIST_TABLES[1],
+    "ОтчетНатуральныеПоказателиПоСделкамИСегментам": LIST_TABLES[2]
+}
+
+# os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
+# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/docker_project/RabbitMQ'
 
 
 def get_my_env_var(var_name: str) -> str:
@@ -20,7 +36,7 @@ def get_file_handler(name: str) -> logging.FileHandler:
     if not os.path.exists(log_dir_name):
         os.mkdir(log_dir_name)
     file_handler: logging.FileHandler = logging.FileHandler(f"{log_dir_name}/{name}.log")
-    file_handler.setFormatter(logging.Formatter(_log_format, datefmt=_dateftm))
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
 
 
