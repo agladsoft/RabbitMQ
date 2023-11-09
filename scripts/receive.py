@@ -92,22 +92,17 @@ class Receive(RabbitMq):
         return date
 
     def change_columns(self, data: dict) -> None:
-        """
-        Changes columns in data.
-        :param data:
-        :return:
-        """
         pass
 
-    def parse_data(self, data, dat_core: Any) -> str:
+    def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         file_name: str = f"data_core_{datetime.now()}.json"
         len_rows: int = len(data)
         for d in data:
             # if len(d) != 24:
             #     raise ValueError(f"The number of columns does not match in {d}")
             self.add_new_columns(len_rows, d, file_name)
-            dat_core.change_columns(d)
-        self.write_to_json(data)
+            data_core().change_columns(d)
+        self.write_to_json(data, eng_table_name)
         return file_name
 
     def read_json(self, msg: str) -> Tuple[list, str, Any]:
@@ -129,7 +124,7 @@ class Receive(RabbitMq):
         }
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         data_core.table = eng_table_name
-        file_name: str = self.parse_data(data, data_core)
+        file_name: str = self.parse_data(data, data_core, eng_table_name)
         return data, file_name, data_core
 
     @staticmethod
@@ -147,14 +142,15 @@ class Receive(RabbitMq):
         data['len_rows'] = len_rows
 
     @staticmethod
-    def write_to_json(msg: str, dir_name: str = "json") -> None:
+    def write_to_json(msg: str, eng_table_name: str, dir_name: str = "json") -> None:
         """
         Write data to json file
         :param msg:
+        :param eng_table_name:
         :param dir_name:
         :return:
         """
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now()}.json"
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now()}_{eng_table_name}.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
