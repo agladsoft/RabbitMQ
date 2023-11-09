@@ -91,6 +91,14 @@ class Receive(RabbitMq):
                 return str(datetime.strptime(date, date_format).date())
         return date
 
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        pass
+
     def parse_data(self, data, dat_core: Any) -> str:
         file_name: str = f"data_core_{datetime.now()}.json"
         len_rows: int = len(data)
@@ -262,7 +270,7 @@ class DataCoreFreight(DataCoreClient):
         data['booking_list'] = data.get('bl')
 
 
-class DataCoreSegment(DataCoreFreight):
+class DataCoreSegment(DataCoreClient):
     def __init__(self):
         super().__init__()
 
@@ -284,7 +292,7 @@ class DataCoreSegment(DataCoreFreight):
         data['Date'] = self.convert_format_date(date) if date else None
 
 
-class CounterParties(DataCoreFreight):
+class CounterParties(DataCoreClient):
     def __init__(self):
         super().__init__()
 
