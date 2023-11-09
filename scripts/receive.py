@@ -169,7 +169,7 @@ class DataCoreClient(Receive):
 
     @property
     def table(self):
-        raise NotImplementedError(f'Определите pattern в {self.__class__.__name__}.')
+        raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
 
     @table.setter
     def table(self, table: str):
