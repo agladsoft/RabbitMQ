@@ -91,9 +91,6 @@ class Receive(RabbitMq):
                 return str(datetime.strptime(date, date_format).date())
         return date
 
-    def change_columns(self, data: dict) -> None:
-        pass
-
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         file_name: str = f"data_core_{datetime.now()}.json"
         len_rows: int = len(data)
@@ -101,7 +98,7 @@ class Receive(RabbitMq):
             # if len(d) != 24:
             #     raise ValueError(f"The number of columns does not match in {d}")
             self.add_new_columns(len_rows, d, file_name)
-            data_core().change_columns(d)
+            data_core.change_columns(d)
         self.write_to_json(data, eng_table_name)
         return file_name
 
@@ -122,8 +119,8 @@ class Receive(RabbitMq):
             LIST_TABLES[1]: DataCoreFreight,
             LIST_TABLES[2]: DataCoreSegment
         }
-        data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
-        data_core.table = eng_table_name
+        data_core_client: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
+        data_core: Any = data_core_client(eng_table_name)
         file_name: str = self.parse_data(data, data_core, eng_table_name)
         return data, file_name, data_core
 
@@ -142,7 +139,7 @@ class Receive(RabbitMq):
         data['len_rows'] = len_rows
 
     @staticmethod
-    def write_to_json(msg: str, eng_table_name: str, dir_name: str = "json") -> None:
+    def write_to_json(msg: str, eng_table_name, dir_name: str = "json") -> None:
         """
         Write data to json file
         :param msg:
@@ -162,14 +159,7 @@ class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
         self.client: Client = self.connect_to_db()
-
-    @property
-    def table(self):
-        raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
-
-    @table.setter
-    def table(self, table: str):
-        self.table: str = table
+        self.table = None
 
     def connect_to_db(self) -> Client:
         """
@@ -237,12 +227,9 @@ class DataCoreClient(Receive):
 
 
 class DataCoreFreight(DataCoreClient):
-    def __init__(self):
+    def __init__(self, table: str):
         super().__init__()
-
-    @property
-    def table(self):
-        return self.table
+        self.table = table
 
     def change_columns(self, data: dict) -> None:
         """
@@ -267,12 +254,9 @@ class DataCoreFreight(DataCoreClient):
 
 
 class DataCoreSegment(DataCoreClient):
-    def __init__(self):
+    def __init__(self, table: str):
         super().__init__()
-
-    @property
-    def table(self):
-        return self.table
+        self.table: str = table
 
     def change_columns(self, data: dict) -> None:
         """
@@ -289,14 +273,12 @@ class DataCoreSegment(DataCoreClient):
 
 
 class CounterParties(DataCoreClient):
-    def __init__(self):
+    def __init__(self, table: str):
         super().__init__()
+        self.table: str = table
 
-    @property
-    def table(self):
-        return self.table
-
-    def change_columns(self, data: dict) -> None:
+    @staticmethod
+    def change_columns(data: dict) -> None:
         """
         Changes columns in data.
         :param data:
