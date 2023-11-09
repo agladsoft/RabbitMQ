@@ -25,7 +25,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg()
+        self.read_text_msg(do_read_file=True)
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -217,7 +217,6 @@ class DataCoreClient(Receive):
                         UPDATE is_obsolete=true
                         WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
                         AND orderNumber='{item['orderNumber']}'""")
-            self.logger.info("Success updated `is_obsolete` key on `True`")
         self.logger.info("Success updated `is_obsolete` key")
 
     def delete_deal(self) -> None:
