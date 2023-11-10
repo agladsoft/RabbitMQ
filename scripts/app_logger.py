@@ -11,7 +11,7 @@ DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
 LIST_TABLES = [
     "counterparties",
     "datacore_freight",
-    "datacore_segment"
+    "natural_indicators_by_contracts_segments"
 ]
 
 TABLE_NAMES: dict = {
