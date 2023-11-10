@@ -1,4 +1,4 @@
-from __init__ import RabbitMq
+from rabbit_mq import RabbitMq
 
 
 class Send(RabbitMq):

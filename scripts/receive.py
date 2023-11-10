@@ -2,13 +2,14 @@ import sys
 import time
 import json
 import contextlib
-from app_logger import *
+from __init__ import *
 from pathlib import Path
-from __init__ import RabbitMq
 from datetime import datetime
+from rabbit_mq import RabbitMq
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
+
 
 date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%d.%m.%Y %H:%M:%S")
 
@@ -25,7 +26,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg()
+        self.read_text_msg(do_read_file=False)
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -44,7 +45,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"test_deal.json", 'r') as file:
+                      f"2023-11-10 09:42:10.965256-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch: str, method: str, properties: str, body) -> None:
@@ -111,16 +112,17 @@ class Receive(RabbitMq):
         :param msg:
         :return:
         """
-        msg = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
+        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
-        rus_table_name = all_data.get("header", {}).get("report")
-        eng_table_name = TABLE_NAMES.get(rus_table_name)
-        data = all_data.get("data", [])
+        rus_table_name: str = all_data.get("header", {}).get("report")
+        eng_table_name: str = TABLE_NAMES.get(rus_table_name)
+        data: list = all_data.get("data", [])
         self.logger.info(f'Starting read json. Length of json is {len(data)}')
         CLASS_NAMES_AND_TABLES: dict = {
             LIST_TABLES[0]: CounterParties,
             LIST_TABLES[1]: DataCoreFreight,
-            LIST_TABLES[2]: DataCoreSegment
+            LIST_TABLES[2]: DataCoreSegment,
+            LIST_TABLES[3]: OrdersReport
         }
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         data_core.table = eng_table_name
@@ -326,6 +328,27 @@ class CounterParties(DataCoreClient):
         data["is_foreign_company"] = is_foreign_company == "Да" if is_foreign_company is not None else None
         data["is_client"] = is_client == "Да" if is_client is not None else None
         data["is_other"] = is_other == "Да" if is_other is not None else None
+
+
+class OrdersReport(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "orderNumber"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        data['booking_list'] = data.get('bl')
 
 
 if __name__ == '__main__':
