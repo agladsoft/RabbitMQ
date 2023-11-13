@@ -12,14 +12,20 @@ LIST_TABLES = [
     "counterparties",
     "datacore_freight",
     "natural_indicators_by_contracts_segments",
-    "orders_report"
+    "orders_report",
+    "auto_pickup_general_report",
+    "transport_units",
+    "consignments"
 ]
 
 TABLE_NAMES: dict = {
     "СписокКонтрагентов": LIST_TABLES[0],
     "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту": LIST_TABLES[1],
     "ОтчетНатуральныеПоказателиПоСделкамИСегментам": LIST_TABLES[2],
-    "ОтчетПоПоручениям": LIST_TABLES[3]
+    "ОтчетПоПоручениям": LIST_TABLES[3],
+    "ОбщийОтчетПоАвтовывозу": LIST_TABLES[4],
+    "ВладельцыКонтейнеров": LIST_TABLES[5],
+    "СписокКоносаментов": LIST_TABLES[6]
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'

@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 import json
@@ -26,7 +27,7 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info('The script has started working')
-        self.read_text_msg(do_read_file=False)
+        self.read_text_msg(do_read_file=True)
         channel, connection = self.connect_rabbit()
         self.logger.info('Success connect to RabbitMQ')
         channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
@@ -45,7 +46,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-11-10 09:42:10.965256-text_msg.json", 'r') as file:
+                      f"2023-11-13 11:53:15.127466-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch: str, method: str, properties: str, body) -> None:
@@ -118,12 +119,6 @@ class Receive(RabbitMq):
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = all_data.get("data", [])
         self.logger.info(f'Starting read json. Length of json is {len(data)}')
-        CLASS_NAMES_AND_TABLES: dict = {
-            LIST_TABLES[0]: CounterParties,
-            LIST_TABLES[1]: DataCoreFreight,
-            LIST_TABLES[2]: DataCoreSegment,
-            LIST_TABLES[3]: OrdersReport
-        }
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         data_core.table = eng_table_name
         data_core: Any = data_core()
@@ -217,13 +212,14 @@ class DataCoreClient(Receive):
                     WHERE original_file_parsed_on='{file_name}'
                 """)
         self.logger.info("Success updated `is_obsolete` key on `False`")
-        group_list: list = list({dictionary[self.deal]: dictionary for dictionary in data}.values())
-        for item in group_list:
-            self.client.query(f"""ALTER TABLE {self.table} 
-                        UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}'
-                        WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
-                        AND {self.deal}='{item[self.deal]}'""")
-        self.logger.info("Success updated all `is_obsolete` key")
+        if self.deal:
+            group_list: list = list({dictionary[self.deal]: dictionary for dictionary in data}.values())
+            for item in group_list:
+                self.client.query(f"""ALTER TABLE {self.table} 
+                            UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}'
+                            WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
+                            AND {self.deal}='{item[self.deal]}'""")
+            self.logger.info("Success updated all `is_obsolete` key")
         self.logger.info("Data processing in the database is completed")
 
     def delete_deal(self) -> None:
@@ -261,20 +257,15 @@ class DataCoreFreight(DataCoreClient):
         :param data:
         :return:
         """
-        voyageDate: Optional[str] = data.get('voyageDate')
-        operationDate: Optional[str] = data.get('operationDate')
-        containerCount: Optional[str] = data.get('containerCount')
-        containerSize: Optional[str] = data.get('containerSize')
-        voyageMonth: Optional[str] = data.get('voyageMonth')
-        operationMonth: Optional[str] = data.get('operationMonth')
-        data['voyageDate'] = self.convert_format_date(voyageDate) if voyageDate else None
-        data['operationDate'] = self.convert_format_date(operationDate) if operationDate else None
-        data['containerCount'] = int(containerCount) if containerCount else None
-        data['containerSize'] = int(containerSize) if containerSize else None
-        data['voyageMonth'] = datetime.strptime(self.convert_format_date(voyageMonth), "%Y-%m-%d").month \
-            if voyageMonth else None
-        data['operationMonth'] = int(operationMonth) if operationMonth else None
+        date_columns: list = ['voyageDate', 'operationDate']
+        numeric_columns: list = ['containerCount', 'containerSize', 'operationMonth']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
         data['booking_list'] = data.get('bl')
+        data['voyageMonth'] = datetime.strptime(self.convert_format_date(data.get('voyageMonth')), "%Y-%m-%d").month \
+            if data.get('voyageMonth') else None
 
 
 class DataCoreSegment(DataCoreClient):
@@ -352,5 +343,95 @@ class OrdersReport(DataCoreClient):
         data['booking_list'] = data.get('bl')
 
 
+class AutoPickupGeneralReport(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "orderNumber"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = [
+            'dateEmptyDelivery_fact', 'dateEmptyDelivery_plan', 'dateLoading_fact',
+            'dateDelivery_fact', 'dateLoading_plan', 'dateReceiptEmpty_plan'
+        ]
+        numeric_columns: list = [
+            'overpayment', 'totalRate', 'amountDowntime', 'rateAgreed',
+            'containerSize', 'amountOverload', 'rateCarrier', 'economy', 'amountAddExpense'
+        ]
+
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+        for column in numeric_columns:
+            data[column] = int(re.sub(r'\s', '', data.get(column))) if data.get(column) else None
+
+
+class TransportUnits(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return None
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        pass
+
+
+class Consignments(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "orderNumber"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['voyageDate']
+        numeric_columns: list = ['containerSize', 'teus', 'year']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
+        data['booking_list'] = data.get('bl')
+
+
 if __name__ == '__main__':
+    CLASS_NAMES_AND_TABLES: dict = {
+        LIST_TABLES[0]: CounterParties,
+        LIST_TABLES[1]: DataCoreFreight,
+        LIST_TABLES[2]: DataCoreSegment,
+        LIST_TABLES[3]: OrdersReport,
+        LIST_TABLES[4]: AutoPickupGeneralReport,
+        LIST_TABLES[5]: TransportUnits,
+        LIST_TABLES[6]: Consignments
+    }
     Receive().read_msg()
