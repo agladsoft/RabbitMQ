@@ -46,7 +46,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-11-13 11:53:15.127466-text_msg.json", 'r') as file:
+                      f"2023-11-13 13:33:43.236289-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch: str, method: str, properties: str, body) -> None:
@@ -362,8 +362,8 @@ class AutoPickupGeneralReport(DataCoreClient):
         :return:
         """
         date_columns: list = [
-            'dateEmptyDelivery_fact', 'dateEmptyDelivery_plan', 'dateLoading_fact',
-            'dateDelivery_fact', 'dateLoading_plan', 'dateReceiptEmpty_plan'
+            'dateEmptyDelivery_fact', 'dateEmptyDelivery_plan', 'dateLoading_fact', 'dateDelivery_fact',
+            'dateReceiptEmpty_fact', 'dateDelivery_plan', 'dateLoading_plan', 'dateReceiptEmpty_plan'
         ]
         numeric_columns: list = [
             'overpayment', 'totalRate', 'amountDowntime', 'rateAgreed',
