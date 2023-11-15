@@ -51,11 +51,19 @@ def get_file_handler(name: str) -> logging.FileHandler:
     return file_handler
 
 
+def get_stream_handler():
+    stream_handler: logging.StreamHandler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return stream_handler
+
+
 def get_logger(name: str) -> logging.getLogger:
     logger: logging.getLogger = logging.getLogger(name)
     if logger.hasHandlers():
         logger.handlers.clear()
     logger.addHandler(get_file_handler(name))
+    logger.addHandler(get_stream_handler())
     logger.setLevel(logging.INFO)
     return logger
 
