@@ -94,6 +94,11 @@ class Receive(RabbitMq):
         return date
 
     def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
         pass
 
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
@@ -268,7 +273,7 @@ class DataCoreFreight(DataCoreClient):
             if data.get('voyageMonth') else None
 
 
-class DataCoreSegment(DataCoreClient):
+class NaturalIndicatorsContractsSegments(DataCoreClient):
     def __init__(self):
         super().__init__()
 
@@ -388,14 +393,6 @@ class TransportUnits(DataCoreClient):
     def deal(self):
         return None
 
-    def change_columns(self, data: dict) -> None:
-        """
-        Changes columns in data.
-        :param data:
-        :return:
-        """
-        pass
-
 
 class Consignments(DataCoreClient):
     def __init__(self):
@@ -424,14 +421,78 @@ class Consignments(DataCoreClient):
         data['booking_list'] = data.get('bl')
 
 
+class SalesPlan(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return None
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        data['section'] = int(data.get('section')) if data.get('section') else None
+
+
+class NaturalIndicatorsTransactionFactDate(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "orderNumber"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['operationDate', 'orderDate']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+
+
+class DevelopmentCounterpartyDepartment(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return None
+
+
 if __name__ == '__main__':
-    CLASS_NAMES_AND_TABLES: dict = {
-        LIST_TABLES[0]: CounterParties,
-        LIST_TABLES[1]: DataCoreFreight,
-        LIST_TABLES[2]: DataCoreSegment,
-        LIST_TABLES[3]: OrdersReport,
-        LIST_TABLES[4]: AutoPickupGeneralReport,
-        LIST_TABLES[5]: TransportUnits,
-        LIST_TABLES[6]: Consignments
+    CLASSES: list = [
+        CounterParties,
+        DataCoreFreight,
+        NaturalIndicatorsContractsSegments,
+        OrdersReport,
+        AutoPickupGeneralReport,
+        TransportUnits,
+        Consignments,
+        SalesPlan,
+        NaturalIndicatorsTransactionFactDate,
+        DevelopmentCounterpartyDepartment
+    ]
+    CLASS_NAMES_AND_TABLES = {
+        table_name: class_name
+        for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
     }
     Receive().read_msg()
