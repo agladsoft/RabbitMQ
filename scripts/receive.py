@@ -373,7 +373,7 @@ class AutoPickupGeneralReport(DataCoreClient):
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
         for column in numeric_columns:
-            data[column] = int(re.sub(r'\s', '', data.get(column))) if data.get(column) else None
+            data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
 
 
 class TransportUnits(DataCoreClient):
