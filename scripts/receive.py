@@ -64,7 +64,8 @@ class Receive(RabbitMq):
         time.sleep(self.time_sleep)
         self.save_text_msg(body)
         data, file_name, dat_core = self.read_json(body)
-        dat_core.count_number_loaded_rows(data, len(data), file_name)
+        if dat_core:
+            dat_core.count_number_loaded_rows(data, len(data), file_name)
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
     @staticmethod
@@ -113,7 +114,7 @@ class Receive(RabbitMq):
         self.write_to_json(data, eng_table_name)
         return file_name
 
-    def read_json(self, msg: str) -> Tuple[list, str, Any]:
+    def read_json(self, msg: str) -> Tuple[list, Optional[str], Any]:
         """
         Decoding a message and working with data.
         :param msg:
@@ -125,10 +126,12 @@ class Receive(RabbitMq):
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = all_data.get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
-        data_core.table = eng_table_name
-        data_core: Any = data_core()
-        file_name: str = self.parse_data(data, data_core, eng_table_name)
-        return data, file_name, data_core
+        if data_core:
+            data_core.table = eng_table_name
+            data_core: Any = data_core()
+            file_name: str = self.parse_data(data, data_core, eng_table_name)
+            return data, file_name, data_core
+        return data, None, data_core
 
     @staticmethod
     def add_new_columns(len_rows: int, data: dict, file_name: str) -> None:
