@@ -46,7 +46,7 @@ class Receive(RabbitMq):
         """
         if do_read_file:
             with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"2023-11-13 13:33:43.236289-text_msg.json", 'r') as file:
+                      f"2023-11-09 11:02:57.369259-text_msg.json", 'r') as file:
                 self.callback(ch='', method='', properties='', body=json.loads(file.read()))
 
     def callback(self, ch: str, method: str, properties: str, body) -> None:
@@ -99,6 +99,7 @@ class Receive(RabbitMq):
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         file_name: str = f"data_core_{datetime.now()}.json"
         len_rows: int = len(data)
+        self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         for d in data:
             # if len(d) != 24:
             #     raise ValueError(f"The number of columns does not match in {d}")
@@ -118,7 +119,6 @@ class Receive(RabbitMq):
         rus_table_name: str = all_data.get("header", {}).get("report")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = all_data.get("data", [])
-        self.logger.info(f'Starting read json. Length of json is {len(data)}')
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         data_core.table = eng_table_name
         data_core: Any = data_core()
