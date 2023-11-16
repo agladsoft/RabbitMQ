@@ -85,15 +85,16 @@ class Receive(RabbitMq):
                 json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
     @staticmethod
-    def convert_format_date(date: str) -> str:
+    def convert_format_date(date: str, data: dict) -> str:
         """operationMonth
         Convert to a date type.
         """
         for date_format in date_formats:
             with contextlib.suppress(ValueError):
                 date_file: datetime.date = datetime.strptime(date, date_format).date()
-                date_clickhouse_access: datetime.date = datetime.strptime("1900-01-01", "%Y-%m-%d").date()
+                date_clickhouse_access: datetime.date = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 if date_file < date_clickhouse_access:
+                    data['OriginalDateEmptyDelivery_fact'] = str(date_file)
                     return str(date_clickhouse_access)
                 return str(date_file)
         return date
@@ -272,12 +273,13 @@ class DataCoreFreight(DataCoreClient):
         date_columns: list = ['voyageDate', 'operationDate']
         numeric_columns: list = ['containerCount', 'containerSize', 'operationMonth']
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
         data['booking_list'] = data.get('bl')
-        data['voyageMonth'] = datetime.strptime(self.convert_format_date(data.get('voyageMonth')), "%Y-%m-%d").month \
-            if data.get('voyageMonth') else None
+        data['voyageMonth'] = datetime.strptime(
+            self.convert_format_date(data.get('voyageMonth'), data), "%Y-%m-%d"
+        ).month if data.get('voyageMonth') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
@@ -303,7 +305,7 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
         date: Optional[str] = data.get('Date')
         data['Year'] = int(year) if year else None
         data['Month'] = int(month) if month else None
-        data['Date'] = self.convert_format_date(date) if date else None
+        data['Date'] = self.convert_format_date(date, data) if date else None
 
 
 class CounterParties(DataCoreClient):
@@ -383,7 +385,7 @@ class AutoPickupGeneralReport(DataCoreClient):
         ]
 
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
 
@@ -422,7 +424,7 @@ class Consignments(DataCoreClient):
         date_columns: list = ['voyageDate']
         numeric_columns: list = ['containerSize', 'teus', 'year']
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
         data['booking_list'] = data.get('bl')
@@ -469,7 +471,7 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
         """
         date_columns: list = ['operationDate', 'orderDate']
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column)) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data) if data.get(column) else None
 
 
 class DevelopmentCounterpartyDepartment(DataCoreClient):
