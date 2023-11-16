@@ -116,7 +116,7 @@ class Receive(RabbitMq):
             #     raise ValueError(f"The number of columns does not match in {d}")
             self.add_new_columns(len_rows, d, file_name)
             data_core.change_columns(d)
-            d['OriginalDate'] = None if d['OriginalDate'] == '' else d['OriginalDate']
+            d['OriginalDate'] = None if d['OriginalDate'] == '' else d['OriginalDate'].strip()
         self.write_to_json(data, eng_table_name)
         return file_name
 
