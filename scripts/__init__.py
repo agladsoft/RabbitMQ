@@ -30,9 +30,9 @@ TABLE_NAMES: dict = {
     "РегистрСведенийКонтрагентыРазвитияПоЦФО":
         "development_counterparty_by_department",
     "ОтчетExportBookings":
-        "ExportBookings",
+        "export_bookings",
     "ОтчетImportBookings":
-        "ImportBookings"
+        "import_bookings"
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
