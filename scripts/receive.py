@@ -91,7 +91,11 @@ class Receive(RabbitMq):
         """
         for date_format in date_formats:
             with contextlib.suppress(ValueError):
-                return str(datetime.strptime(date, date_format).date())
+                date_file: datetime.date = datetime.strptime(date, date_format).date()
+                date_clickhouse_access: datetime.date = datetime.strptime("1900-01-01", "%Y-%m-%d").date()
+                if date_file < date_clickhouse_access:
+                    return str(date_clickhouse_access)
+                return str(date_file)
         return date
 
     def change_columns(self, data: dict) -> None:
