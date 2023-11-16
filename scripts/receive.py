@@ -94,7 +94,7 @@ class Receive(RabbitMq):
                 date_file: datetime.date = datetime.strptime(date, date_format).date()
                 date_clickhouse_access: datetime.date = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 if date_file < date_clickhouse_access:
-                    data['OriginalDate'] += f"({column}: {date_file})\n"
+                    data['originalDate'] += f"({column}: {date_file})\n"
                     return str(date_clickhouse_access)
                 return str(date_file)
         return date
@@ -116,7 +116,7 @@ class Receive(RabbitMq):
             #     raise ValueError(f"The number of columns does not match in {d}")
             self.add_new_columns(len_rows, d, file_name)
             data_core.change_columns(d)
-            d['OriginalDate'] = d['OriginalDate'].strip() if d['OriginalDate'] else None
+            d['originalDate'] = d['originalDate'].strip() if d['originalDate'] else None
         self.write_to_json(data, eng_table_name)
         return file_name
 
@@ -152,7 +152,7 @@ class Receive(RabbitMq):
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         data['len_rows'] = len_rows
-        data['OriginalDate'] = ''
+        data['originalDate'] = ''
 
     @staticmethod
     def write_to_json(msg: str, eng_table_name, dir_name: str = "json") -> None:
