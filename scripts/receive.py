@@ -222,18 +222,20 @@ class DataCoreClient(Receive):
         :return:
         """
         self.client.query(f"""
-                    ALTER TABLE {self.table}
-                    UPDATE is_obsolete=false
-                    WHERE original_file_parsed_on='{file_name}'
-                """)
+            ALTER TABLE {self.table}
+            UPDATE is_obsolete=false
+            WHERE original_file_parsed_on='{file_name}'
+        """)
         self.logger.info("Success updated `is_obsolete` key on `False`")
         if self.deal:
             group_list: list = list({dictionary[self.deal]: dictionary for dictionary in data}.values())
             for item in group_list:
-                self.client.query(f"""ALTER TABLE {self.table} 
-                            UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}'
-                            WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
-                            AND {self.deal}='{item[self.deal]}'""")
+                self.client.query(f"""
+                    ALTER TABLE {self.table} 
+                    UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}'
+                    WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
+                    AND {self.deal}='{item[self.deal]}'
+                """)
             self.logger.info("Success updated all `is_obsolete` key")
         self.logger.info("Data processing in the database is completed")
 
