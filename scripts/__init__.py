@@ -28,7 +28,11 @@ TABLE_NAMES: dict = {
     "ОтчетПоНатуральнымНаОсновеОперацийПоФактическимДатам":
         "natural_indicators_by_transaction_fact_date",
     "РегистрСведенийКонтрагентыРазвитияПоЦФО":
-        "development_counterparty_by_department"
+        "development_counterparty_by_department",
+    "ОтчетExportBookings":
+        "ExportBookings",
+    "ОтчетImportBookings":
+        "ImportBookings"
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
