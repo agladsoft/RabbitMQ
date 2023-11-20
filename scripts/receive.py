@@ -358,6 +358,9 @@ class OrdersReport(DataCoreClient):
         :param data:
         :return:
         """
+        date_columns: list = ['voyageDateout']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         data['booking_list'] = data.get('bl')
 
 
@@ -537,6 +540,88 @@ class ImportBookings(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class CompletedRepackagesReport(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return None
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['repackingDate']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        data['consignment'] = data.get('Коносамент')
+        # Русская раскладка ↓
+        data['inspection_container_count'] = data.get('inspection_сontainer_count') \
+            if data.get('inspection_сontainer_count') else data.get('inspection_container_count')
+        data['import_container_count'] = data.get('import_сontainer_count') \
+            if data.get('import_сontainer_count') else data.get('import_container_count')
+        data['container_number'] = data.get('сontainer_number') \
+            if data.get('сontainer_number') else data.get('container_number')
+        data['export_container_count'] = data.get('export_сontainer_count') \
+            if data.get('export_сontainer_count') else data.get('export_container_count')
+
+
+class AutoVisits(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "queueID"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['exitDate', 'entryDate', 'registrationDate']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        # Русская раскладка ↓
+        data['carNumber'] = data.get('сarNumber') \
+            if data.get('inspection_сontainer_count') else data.get('inspection_container_count')
+
+
+class AccountingDocumentsRequests(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "subjectNumber"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['startDate', 'requestDate']
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+
+
 if __name__ == '__main__':
     CLASSES: list = [
         CounterParties,
@@ -550,7 +635,10 @@ if __name__ == '__main__':
         NaturalIndicatorsTransactionFactDate,
         DevelopmentCounterpartyDepartment,
         ExportBookings,
-        ImportBookings
+        ImportBookings,
+        CompletedRepackagesReport,
+        AutoVisits,
+        AccountingDocumentsRequests
     ]
     CLASS_NAMES_AND_TABLES = {
         table_name: class_name
