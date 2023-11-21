@@ -85,17 +85,21 @@ class Receive(RabbitMq):
                 json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
     @staticmethod
-    def convert_format_date(date: str, data: dict, column) -> str:
+    def convert_format_date(date: str, data: dict, column, is_datetime: bool = False) -> str:
         """operationMonth
         Convert to a date type.
         """
         for date_format in date_formats:
             with contextlib.suppress(ValueError):
-                date_file: datetime.date = datetime.strptime(date, date_format).date()
-                date_clickhouse_access: datetime.date = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
-                if date_file < date_clickhouse_access:
+                if not is_datetime:
+                    date_file: Union[datetime.date, datetime] = datetime.strptime(date, date_format).date()
+                    date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
+                else:
+                    date_file = datetime.strptime(date, date_format)
+                    date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
+                if date_file < date_db_access:
                     data['originalDateString'] += f"({column}: {date_file})\n"
-                    return str(date_clickhouse_access)
+                    return str(date_db_access)
                 return str(date_file)
         return date
 
@@ -593,7 +597,8 @@ class AutoVisits(DataCoreClient):
         """
         date_columns: list = ['exitDate', 'entryDate', 'registrationDate']
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data, column, is_datetime=True) \
+                if data.get(column) else None
         # Русская раскладка ↓
         data['carNumber'] = data.get('сarNumber') \
             if data.get('inspection_сontainer_count') else data.get('inspection_container_count')
