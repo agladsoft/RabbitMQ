@@ -6,6 +6,7 @@ import contextlib
 from __init__ import *
 from pathlib import Path
 from datetime import datetime
+from datetime import timedelta
 from rabbit_mq import RabbitMq
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
@@ -212,9 +213,10 @@ class DataCoreClient(Receive):
         Counting the number of rows to update transaction data.
         :return:
         """
+        datetime_start = datetime.now()
         while count_rows != self.client.query(
                 f"SELECT count(*) FROM {self.table} WHERE original_file_parsed_on='{file_name}'"
-        ).result_rows[0][0]:
+        ).result_rows[0][0] and datetime.now() - datetime_start < timedelta(minutes=60):
             self.logger.info("The data has not yet been uploaded to the database")
             time.sleep(60)
         self.logger.info("The data has been uploaded to the database")
