@@ -601,7 +601,7 @@ class AutoVisits(DataCoreClient):
                 if data.get(column) else None
         # Русская раскладка ↓
         data['carNumber'] = data.get('сarNumber') \
-            if data.get('inspection_сontainer_count') else data.get('inspection_container_count')
+            if data.get('сarNumber') else data.get('сarNumber')
 
 
 class AccountingDocumentsRequests(DataCoreClient):
