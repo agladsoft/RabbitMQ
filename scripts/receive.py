@@ -622,9 +622,10 @@ class AccountingDocumentsRequests(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['startDate', 'requestDate']
+        date_columns: list = ['startDate', 'endDate', 'requestDate']
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data, column, is_datetime=True) \
+                if data.get(column) else None
 
 
 if __name__ == '__main__':
