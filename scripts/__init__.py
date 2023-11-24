@@ -38,7 +38,13 @@ TABLE_NAMES: dict = {
     "ОтчетАвтовизиты":
         "autovisits",
     "ОтчетПоОбращениямВПЭО":
-        "accounting_documents_requests"
+        "accounting_documents_requests",
+    "ОтчетЕжедневнаяСводка":
+        "daily_summary",
+    "ОтчетПоЖДПеревозкамМаркетингПоОперациям":
+        "rzhd_by_operations_report",
+    "ОтчетПоМаржинальностиСделок":
+        "orders_marginality_report"
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'

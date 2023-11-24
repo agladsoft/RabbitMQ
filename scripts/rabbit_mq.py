@@ -1,4 +1,6 @@
 import pika
+from typing import Optional
+from pika.adapters.blocking_connection import BlockingChannel
 
 
 class RabbitMq:
@@ -11,6 +13,7 @@ class RabbitMq:
         self.durable = True
         self.queue_name = 'DC_TEST_Q'
         self.time_sleep = 10
+        self.channel: Optional[BlockingChannel] = None
 
     def connect_rabbit(self):
         credentials = pika.PlainCredentials(self.user, self.password)
@@ -19,5 +22,4 @@ class RabbitMq:
                                                '/',
                                                credentials, heartbeat=18000)
         connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        return channel, connection
+        self.channel = connection.channel()
