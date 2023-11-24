@@ -780,7 +780,11 @@ class OrdersMarginalityReport(DataCoreClient):
         :param data:
         :return:
         """
-        float_columns: list = ['expenses_without_vat_fact', 'profit_fact']
+        float_columns: list = [
+            'expenses_rental_without_vat_fact', 'income_without_vat_fact', 'profit_plan',
+            'income_without_vat_plan', 'expenses_without_vat_plan', 'expenses_without_vat_fact',
+            'profit_fact'
+        ]
         date_columns: list = ['order_creation_date']
 
         for column in float_columns:
@@ -810,7 +814,7 @@ if __name__ == '__main__':
         RZHDOperationsReport,
         OrdersMarginalityReport
     ]
-    CLASS_NAMES_AND_TABLES = {
+    CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name
         for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
     }
