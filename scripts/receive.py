@@ -324,7 +324,7 @@ class DataCoreFreight(DataCoreClient):
         :return:
         """
         date_columns: list = ['voyageDate', 'operationDate']
-        numeric_columns: list = ['voyageMonth', 'containerCount', 'containerSize', 'operationMonth']
+        numeric_columns: list = ['containerCount', 'containerSize', 'operationMonth']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
