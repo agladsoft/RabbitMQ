@@ -13,7 +13,13 @@ from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
 
 
-date_formats: tuple = ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%d.%m.%Y %H:%M:%S", "%d.%m.%Y")
+date_formats: tuple = (
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%d.%m.%Y %H:%M:%S",
+    "%d.%m.%Y"
+)
 
 
 class Receive(RabbitMq):
