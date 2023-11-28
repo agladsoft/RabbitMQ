@@ -778,7 +778,7 @@ class OrdersMarginalityReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
 
     def change_columns(self, data: dict) -> None:
         """
