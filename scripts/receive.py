@@ -377,17 +377,6 @@ class CounterParties(DataCoreClient):
     def deal(self):
         return "rc_uid"
 
-    def change_columns(self, data: dict) -> None:
-        """
-        Changes columns in data.
-        :param data:
-        :return:
-        """
-        bool_columns: list = ['is_supplier', 'is_foreign_company', 'is_client', 'is_other']
-
-        for column in bool_columns:
-            data[column] = column == "Да" if column is not None else None
-
 
 class OrdersReport(DataCoreClient):
     def __init__(self):
