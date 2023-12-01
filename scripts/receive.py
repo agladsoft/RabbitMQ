@@ -70,15 +70,18 @@ class Receive(RabbitMq):
         :param body:
         :return:
         """
-        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                    + str(datetime.now().date()))
-        self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called")
-        time.sleep(self.time_sleep)
-        self.save_text_msg(body)
-        data, file_name, data_core = self.read_json(body)
-        if data_core:
-            data_core.count_number_loaded_rows(data, len(data), file_name)
-        self.logger.info("Callback exit. The data from the queue was processed by the script")
+        try:
+            self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
+                                                        + str(datetime.now().date()))
+            self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called")
+            time.sleep(self.time_sleep)
+            self.save_text_msg(body)
+            data, file_name, data_core = self.read_json(body)
+            if data_core:
+                data_core.count_number_loaded_rows(data, len(data), file_name)
+            self.logger.info("Callback exit. The data from the queue was processed by the script")
+        except AssertionError:
+            pass
 
     @staticmethod
     def save_text_msg(msg: Union[bytes, bytearray]) -> None:
@@ -157,7 +160,7 @@ class Receive(RabbitMq):
         if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
-            self.channel.basic_cancel()
+            raise AssertionError("Stop consuming because columns is different")
 
     def read_json(self, msg: str) -> Tuple[list, Optional[str], Any]:
         """
@@ -486,6 +489,7 @@ class Consignments(DataCoreClient):
 class SalesPlan(DataCoreClient):
     def __init__(self):
         super().__init__()
+        self.removed_columns_db = ['uuid', 'originalDateString']
 
     @property
     def table(self):
@@ -540,6 +544,7 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 class DevelopmentCounterpartyDepartment(DataCoreClient):
     def __init__(self):
         super().__init__()
+        self.removed_columns_db = ['uuid', 'originalDateString']
 
     @property
     def table(self):

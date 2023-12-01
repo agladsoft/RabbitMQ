@@ -23,3 +23,4 @@ class RabbitMq:
                                                credentials, heartbeat=18000)
         connection = pika.BlockingConnection(parameters)
         self.channel = connection.channel()
+        return connection

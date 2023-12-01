@@ -12,11 +12,8 @@ class Send(RabbitMq):
 
     def send_massage(self, msg):
         """Sending a message to a queue RabbitMQ"""
-        channel, connection = self.connect_rabbit()
-        channel.basic_publish(exchange=self.exchange,
-                              routing_key=self.routing_key,
-                              body=msg)
-
+        connection = self.connect_rabbit()
+        self.channel.basic_publish(exchange=self.exchange, routing_key=self.routing_key, body=msg)
         connection.close()
 
     def main(self, file_path):
