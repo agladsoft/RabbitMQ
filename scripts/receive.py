@@ -73,7 +73,8 @@ class Receive(RabbitMq):
         try:
             self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                         + str(datetime.now().date()))
-            self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called")
+            self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
+                             f"body_message called")
             time.sleep(self.time_sleep)
             self.save_text_msg(body)
             data, file_name, data_core = self.read_json(body)
@@ -99,33 +100,6 @@ class Receive(RabbitMq):
             with open(file_name, 'w') as file:
                 json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
-    @staticmethod
-    def convert_format_date(date: str, data: dict, column, is_datetime: bool = False) -> str:
-        """operationMonth
-        Convert to a date type.
-        """
-        for date_format in date_formats:
-            with contextlib.suppress(ValueError):
-                if not is_datetime:
-                    date_file: Union[datetime.date, datetime] = datetime.strptime(date, date_format).date()
-                    date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
-                else:
-                    date_file = datetime.strptime(date, date_format)
-                    date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
-                if date_file < date_db_access:
-                    data['originalDateString'] += f"({column}: {date_file})\n"
-                    return str(date_db_access)
-                return str(date_file)
-        return date
-
-    def change_columns(self, data: dict) -> None:
-        """
-        Changes columns in data.
-        :param data:
-        :return:
-        """
-        pass
-
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         """
 
@@ -137,30 +111,17 @@ class Receive(RabbitMq):
         file_name: str = f"data_core_{datetime.now()}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         list_columns_db: list = data_core.get_table_columns()
+        original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
         for d in data:
-            self.add_new_columns(d, file_name)
+            data_core.add_new_columns(d, file_name, original_date_string)
             data_core.change_columns(d)
-            d['originalDateString'] = d['originalDateString'].strip() if d['originalDateString'] else None
+            d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
         list_columns_rabbit: list = list(data[0].keys())
         [list_columns_rabbit.remove(remove_column) for remove_column in data_core.removed_columns_rabbit]
-        self.check_difference_columns(list_columns_db, list_columns_rabbit)
+        data_core.check_difference_columns(list_columns_db, list_columns_rabbit)
         self.write_to_json(data, eng_table_name)
         return file_name
-
-    def check_difference_columns(self, list_columns_db: list, list_columns_rabbit: list) -> None:
-        """
-
-        :param list_columns_db:
-        :param list_columns_rabbit:
-        :return:
-        """
-        diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
-        diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
-        if diff_db or diff_rabbit:
-            self.logger.error(f"The difference in columns {diff_db} from the database. "
-                              f"The difference in columns {diff_rabbit} from the rabbit")
-            raise AssertionError("Stop consuming because columns is different")
 
     def read_json(self, msg: str) -> Tuple[list, Optional[str], Any]:
         """
@@ -180,19 +141,6 @@ class Receive(RabbitMq):
             file_name: str = self.parse_data(data, data_core, eng_table_name)
             return data, file_name, data_core
         return data, None, data_core
-
-    @staticmethod
-    def add_new_columns(data: dict, file_name: str) -> None:
-        """
-        Adding new columns.
-        :param data:
-        :param file_name:
-        :return:
-        """
-        data['original_file_parsed_on'] = file_name
-        data['is_obsolete'] = None
-        data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        data['originalDateString'] = ''
 
     def write_to_json(self, msg: str, eng_table_name, dir_name: str = "json") -> None:
         """
@@ -229,6 +177,64 @@ class DataCoreClient(Receive):
     @property
     def deal(self):
         raise NotImplementedError(f'Define deal in {self.__class__.__name__}.')
+
+    @property
+    def original_date_string(self):
+        return None
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        pass
+
+    def convert_format_date(self, date: str, data: dict, column, is_datetime: bool = False) -> str:
+        """
+        Convert to a date type.
+        """
+        for date_format in date_formats:
+            with contextlib.suppress(ValueError):
+                if not is_datetime:
+                    date_file: Union[datetime.date, datetime] = datetime.strptime(date, date_format).date()
+                    date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
+                else:
+                    date_file = datetime.strptime(date, date_format)
+                    date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
+                if date_file < date_db_access:
+                    data[self.original_date_string] += f"({column}: {date_file})\n"
+                    return str(date_db_access)
+                return str(date_file)
+        return date
+
+    @staticmethod
+    def add_new_columns(data: dict, file_name: str, original_date_string: str) -> None:
+        """
+        Adding new columns.
+        :param data:
+        :param file_name:
+        :param original_date_string:
+        :return:
+        """
+        data['original_file_parsed_on'] = file_name
+        data['is_obsolete'] = None
+        data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        data[original_date_string] = ''
+
+    def check_difference_columns(self, list_columns_db: list, list_columns_rabbit: list) -> None:
+        """
+
+        :param list_columns_db:
+        :param list_columns_rabbit:
+        :return:
+        """
+        diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
+        diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
+        if diff_db or diff_rabbit:
+            self.logger.error(f"The difference in columns {diff_db} from the database. "
+                              f"The difference in columns {diff_rabbit} from the rabbit")
+            raise AssertionError("Stop consuming because columns is different")
 
     def connect_to_db(self) -> Client:
         """
@@ -318,7 +324,11 @@ class DataCoreFreight(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_voyage_month_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -326,19 +336,19 @@ class DataCoreFreight(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['voyageDate', 'operationDate']
-        numeric_columns: list = ['containerCount', 'containerSize', 'operationMonth']
+        date_columns: list = ['voyage_date', 'operation_date']
+        numeric_columns: list = ['container_count', 'container_size', 'operation_month']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
-        data['booking_list'] = data.get('bl')
-        data['voyageMonth'] = datetime.strptime(
-            self.convert_format_date(data.get('voyageMonth'), data, 'voyageMonth'),
+        data['consignment'] = data.get('bl')
+        data['voyage_month'] = datetime.strptime(
+            self.convert_format_date(data.get('voyage_month'), data, 'voyage_month'),
             "%Y-%m-%d"
-        ).month if data.get('voyageMonth') else None
+        ).month if data.get('voyage_month') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
@@ -351,7 +361,11 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -359,8 +373,8 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['Date']
-        numeric_columns: list = ['Year', 'Month']
+        date_columns: list = ['date']
+        numeric_columns: list = ['year', 'month']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
@@ -392,7 +406,11 @@ class OrdersReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_voyage_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -400,12 +418,12 @@ class OrdersReport(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['voyageDateout']
+        date_columns: list = ['voyage_date']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
-        data['booking_list'] = data.get('bl')
+        data['consignment'] = data.get('bl')
 
 
 class AutoPickupGeneralReport(DataCoreClient):
@@ -418,7 +436,11 @@ class AutoPickupGeneralReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_date_delivery_empty_fact_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -427,14 +449,14 @@ class AutoPickupGeneralReport(DataCoreClient):
         :return:
         """
         date_columns: list = [
-            'dateEmptyDelivery_fact', 'dateEmptyDelivery_plan', 'dateLoading_fact',
-            'dateDelivery_fact', 'dateReceiptEmpty_fact', 'dateDelivery_plan',
-            'dateLoading_plan', 'dateReceiptEmpty_plan'
+            'date_delivery_empty_fact', 'date_delivery_empty_plan', 'date_loading_fact',
+            'date_delivery_fact', 'date_receiving_empty_fact', 'date_delivery_plan',
+            'date_loading_plan', 'date_receiving_empty_plan'
         ]
         numeric_columns: list = [
-            'overpayment', 'totalRate', 'amountDowntime', 'rateAgreed',
-            'containerSize', 'amountOverload', 'rateCarrier',
-            'economy', 'amountAddExpense'
+            'overpayment', 'total_rate', 'downtime_amount', 'agreed_rate',
+            'container_size', 'overload_amount', 'carrier_rate',
+            'economy', 'add_expense_amount'
         ]
 
         for column in date_columns:
@@ -467,7 +489,11 @@ class Consignments(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_voyage_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -475,21 +501,20 @@ class Consignments(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['voyageDate']
-        numeric_columns: list = ['containerSize', 'teus', 'year']
+        date_columns: list = ['voyage_date']
+        numeric_columns: list = ['container_size', 'teu', 'year']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
-        data['booking_list'] = data.get('bl')
+        data['consignment'] = data.get('bl')
 
 
 class SalesPlan(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_db = ['uuid', 'originalDateString']
 
     @property
     def table(self):
@@ -505,7 +530,7 @@ class SalesPlan(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['containerTEU', 'containerCount', 'section', 'year', 'month']
+        numeric_columns: list = ['teu', 'container_count', 'section', 'year', 'month']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -521,7 +546,11 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_operation_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -530,10 +559,10 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
         :return:
         """
         numeric_columns: list = [
-            'containerSize', 'operationMonth', 'containerCount',
-            'containerTEU', 'operationYear'
+            'container_size', 'operation_month', 'container_count',
+            'teu', 'operation_year'
         ]
-        date_columns: list = ['operationDate', 'orderDate']
+        date_columns: list = ['operation_date', 'order_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -544,7 +573,6 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 class DevelopmentCounterpartyDepartment(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_db = ['uuid', 'originalDateString']
 
     @property
     def table(self):
@@ -576,7 +604,11 @@ class ExportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_booking_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -584,8 +616,8 @@ class ExportBookings(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['containerSize', 'containerCount', 'FreightRate']
-        date_columns: list = ['cargoReadiness', 'ETD', 'ETA', 'bookingDate']
+        numeric_columns: list = ['container_size', 'container_count', 'freight_rate']
+        date_columns: list = ['cargo_readiness', 'etd', 'eta', 'booking_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -603,7 +635,11 @@ class ImportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_booking_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -611,8 +647,8 @@ class ImportBookings(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['containerSize', 'containerCount', 'FreightRate']
-        date_columns: list = ['ETD', 'ETA', 'bookingDate']
+        numeric_columns: list = ['container_size', 'container_count', 'freight_rate']
+        date_columns: list = ['etd', 'eta', 'booking_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -639,6 +675,10 @@ class CompletedRepackagesReport(DataCoreClient):
     def deal(self):
         return None
 
+    @property
+    def original_date_string(self):
+        return "original_repacking_date_string"
+
     def change_columns(self, data: dict) -> None:
         """
         Changes columns in data.
@@ -649,14 +689,14 @@ class CompletedRepackagesReport(DataCoreClient):
             'warehouse_wms_count', 'inspection_сontainer_count', 'import_teu',
             'import_сontainer_count', 'export_teu', 'export_сontainer_count'
         ]
-        date_columns: list = ['repackingDate']
+        date_columns: list = ['repacking_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
-        data['booking_list'] = data.get('bl')
+        data['consignment'] = data.get('bl')
 
         # Русская раскладка ↓
         data['inspection_container_count'] = data.get('inspection_сontainer_count') \
@@ -679,7 +719,11 @@ class AutoVisits(DataCoreClient):
 
     @property
     def deal(self):
-        return "queueID"
+        return "queue_id"
+
+    @property
+    def original_date_string(self):
+        return "original_entry_datetime_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -687,8 +731,8 @@ class AutoVisits(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['processingTime', 'waitingTime']
-        date_columns: list = ['exitDate', 'entryDate', 'registrationDate']
+        numeric_columns: list = ['processing_time', 'waiting_time']
+        date_columns: list = ['exit_datetime', 'entry_datetime', 'registration_datetime']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -708,7 +752,11 @@ class AccountingDocumentsRequests(DataCoreClient):
 
     @property
     def deal(self):
-        return "subjectNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_request_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -716,7 +764,7 @@ class AccountingDocumentsRequests(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['startDate', 'endDate', 'requestDate']
+        date_columns: list = ['start_date', 'end_date', 'request_date']
 
         for column in date_columns:
             data[column] = self.convert_format_date(
@@ -734,7 +782,11 @@ class DailySummary(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -742,8 +794,8 @@ class DailySummary(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['weightCargo', 'weightTare', 'tonnage', 'containerSize']
-        date_columns: list = ['motionDate']
+        numeric_columns: list = ['cargo_weight', 'tare_weight', 'tonnage', 'container_size']
+        date_columns: list = ['motion_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -761,7 +813,11 @@ class RZHDOperationsReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "orderNumber"
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_operation_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -769,8 +825,8 @@ class RZHDOperationsReport(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['containerSize', 'operationMonth', 'operationYear']
-        date_columns: list = ['operationDate']
+        numeric_columns: list = ['container_size', 'operation_month', 'operation_year']
+        date_columns: list = ['operation_date']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -789,6 +845,10 @@ class OrdersMarginalityReport(DataCoreClient):
     @property
     def deal(self):
         return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_order_creation_date_string"
 
     def change_columns(self, data: dict) -> None:
         """
