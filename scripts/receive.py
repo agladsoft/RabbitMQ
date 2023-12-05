@@ -5,12 +5,15 @@ import json
 import contextlib
 from __init__ import *
 from pathlib import Path
+from pika.spec import Basic
 from datetime import datetime
 from datetime import timedelta
 from rabbit_mq import RabbitMq
+from pika import BasicProperties
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
+from pika.adapters.blocking_connection import BlockingChannel
 
 
 date_formats: tuple = (
@@ -40,7 +43,7 @@ class Receive(RabbitMq):
         self.channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
         self.channel.queue_declare(queue=self.queue_name, durable=self.durable)
         self.channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
-        self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=True)
+        self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=False)
         self.logger.info("Start consuming")
         self.channel.start_consuming()
         self.logger.info('The script has completed working')
@@ -61,7 +64,13 @@ class Receive(RabbitMq):
                     body=json.loads(file.read().encode().decode('utf-8-sig'))
                 )
 
-    def callback(self, ch: str, method: str, properties: str, body) -> None:
+    def callback(
+            self,
+            ch: Union[BlockingChannel, str],
+            method: Union[Basic.Deliver, str],
+            properties: Union[BasicProperties, str],
+            body: Union[bytes, str]
+    ) -> None:
         """
         Working with the message body
         :param ch:
@@ -76,6 +85,7 @@ class Receive(RabbitMq):
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called")
             time.sleep(self.time_sleep)
+            self.channel.basic_ack(delivery_tag=method.delivery_tag)
             self.save_text_msg(body)
             data, file_name, data_core = self.read_json(body)
             if data_core:
