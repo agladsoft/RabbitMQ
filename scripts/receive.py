@@ -316,7 +316,6 @@ class DataCoreClient(Receive):
 class DataCoreFreight(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_rabbit = ['bl']
 
     @property
     def table(self):
@@ -344,7 +343,6 @@ class DataCoreFreight(DataCoreClient):
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
-        data['consignment'] = data.get('bl')
         data['voyage_month'] = datetime.strptime(
             self.convert_format_date(data.get('voyage_month'), data, 'voyage_month'),
             "%Y-%m-%d"
@@ -398,7 +396,6 @@ class CounterParties(DataCoreClient):
 class OrdersReport(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_rabbit = ['bl']
 
     @property
     def table(self):
@@ -422,8 +419,6 @@ class OrdersReport(DataCoreClient):
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-
-        data['consignment'] = data.get('bl')
 
 
 class AutoPickupGeneralReport(DataCoreClient):
@@ -481,7 +476,6 @@ class TransportUnits(DataCoreClient):
 class Consignments(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_rabbit = ['bl']
 
     @property
     def table(self):
@@ -508,8 +502,6 @@ class Consignments(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
-
-        data['consignment'] = data.get('bl')
 
 
 class SalesPlan(DataCoreClient):
@@ -660,7 +652,6 @@ class CompletedRepackagesReport(DataCoreClient):
     def __init__(self):
         super().__init__()
         self.removed_columns_rabbit = [
-            'bl',
             'export_сontainer_count',
             'import_сontainer_count',
             'сontainer_number',
@@ -695,8 +686,6 @@ class CompletedRepackagesReport(DataCoreClient):
             data[column] = int(data.get(column)) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-
-        data['consignment'] = data.get('bl')
 
         # Русская раскладка ↓
         data['inspection_container_count'] = data.get('inspection_сontainer_count') \
