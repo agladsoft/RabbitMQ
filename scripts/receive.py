@@ -116,7 +116,8 @@ class Receive(RabbitMq):
         for d in data:
             data_core.add_new_columns(d, file_name, original_date_string)
             data_core.change_columns(d)
-            d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
+            if original_date_string:
+                d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
         list_columns_rabbit: list = list(data[0].keys())
         [list_columns_rabbit.remove(remove_column) for remove_column in data_core.removed_columns_rabbit]
         data_core.check_difference_columns(list_columns_db, list_columns_rabbit)
@@ -220,7 +221,8 @@ class DataCoreClient(Receive):
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = None
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        data[original_date_string] = ''
+        if original_date_string:
+            data[original_date_string] = ''
 
     def check_difference_columns(self, list_columns_db: list, list_columns_rabbit: list) -> None:
         """
