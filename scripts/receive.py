@@ -85,7 +85,9 @@ class Receive(RabbitMq):
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called")
             time.sleep(self.time_sleep)
-            self.channel.basic_ack(delivery_tag=method.delivery_tag)
+            delivery_tag = method.delivery_tag if not isinstance(method, str) else None
+            if delivery_tag:
+                self.channel.basic_ack(delivery_tag=delivery_tag)
             self.save_text_msg(body)
             data, file_name, data_core = self.read_json(body)
             if data_core:
@@ -534,7 +536,7 @@ class SalesPlan(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['teu', 'container_count', 'section', 'year', 'month']
+        numeric_columns: list = ['teu', 'container_count', 'container_size', 'year', 'month']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
