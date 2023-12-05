@@ -131,7 +131,6 @@ class Receive(RabbitMq):
             if original_date_string:
                 d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
         list_columns_rabbit: list = list(data[0].keys())
-        [list_columns_rabbit.remove(remove_column) for remove_column in data_core.removed_columns_rabbit]
         data_core.check_difference_columns(list_columns_db, list_columns_rabbit)
         self.write_to_json(data, eng_table_name)
         return file_name
@@ -177,7 +176,6 @@ class DataCoreClient(Receive):
         super().__init__()
         self.client: Client = self.connect_to_db()
         self.removed_columns_db = ['uuid']
-        self.removed_columns_rabbit = []
 
     @property
     def table(self):
