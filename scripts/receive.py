@@ -665,12 +665,6 @@ class ImportBookings(DataCoreClient):
 class CompletedRepackagesReport(DataCoreClient):
     def __init__(self):
         super().__init__()
-        self.removed_columns_rabbit = [
-            'export_сontainer_count',
-            'import_сontainer_count',
-            'сontainer_number',
-            'inspection_сontainer_count'
-        ]
 
     @property
     def table(self):
@@ -691,8 +685,8 @@ class CompletedRepackagesReport(DataCoreClient):
         :return:
         """
         numeric_columns: list = [
-            'warehouse_wms_count', 'inspection_сontainer_count', 'import_teu',
-            'import_сontainer_count', 'export_teu', 'export_сontainer_count'
+            'warehouse_wms_count', 'inspection_container_count', 'import_teu',
+            'import_container_count', 'export_teu', 'export_container_count'
         ]
         date_columns: list = ['repacking_date']
 
@@ -700,16 +694,6 @@ class CompletedRepackagesReport(DataCoreClient):
             data[column] = int(data.get(column)) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-
-        # Русская раскладка ↓
-        data['inspection_container_count'] = data.get('inspection_сontainer_count') \
-            if data.get('inspection_сontainer_count') else data.get('inspection_container_count')
-        data['import_container_count'] = data.get('import_сontainer_count') \
-            if data.get('import_сontainer_count') else data.get('import_container_count')
-        data['container_number'] = data.get('сontainer_number') \
-            if data.get('сontainer_number') else data.get('container_number')
-        data['export_container_count'] = data.get('export_сontainer_count') \
-            if data.get('export_сontainer_count') else data.get('export_container_count')
 
 
 class AutoVisits(DataCoreClient):
