@@ -243,7 +243,7 @@ class DataCoreClient(Receive):
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
         diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
-        if diff_db or diff_rabbit:
+        if (diff_db or diff_rabbit) and (diff_db != ['client_uid'] and diff_rabbit != ['clientUID']):
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
             raise AssertionError("Stop consuming because columns is different")
@@ -447,7 +447,7 @@ class AutoPickupGeneralReport(DataCoreClient):
 
     @property
     def original_date_string(self):
-        return "original_date_delivery_empty_fact_string"
+        return "original_date_delivery_plan_string"
 
     def change_columns(self, data: dict) -> None:
         """
