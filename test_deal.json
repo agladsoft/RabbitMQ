@@ -1,0 +1,601 @@
+[
+
+
+	{
+
+
+		"voyage": "ADSUN143",
+
+
+		"voyageDate": "2023-08-02T21:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": null,
+
+
+		"clientINN": "2315171490",
+
+
+		"manager": "Давыдова Мария Владимировна",
+
+
+		"line": "ADMIRAL CONTAINER TRANSPORT S.A.",
+
+
+		"client": "РУСМАРИН-ЛОГИСТИКА-Н ООО",
+
+
+		"clientUID": "2fc36335-3dd4-11ea-800e-005056886559",
+
+
+		"vessel": "ADMIRAL SUN",
+
+
+		"department": "НМКК",
+
+
+		"container": "LCGU8033967",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "AT2301103621",
+
+
+		"destination": "ISTANBUL"
+
+
+	},
+
+
+	{
+
+
+		"voyage": "2311S",
+
+
+		"voyageDate": "2023-07-27T21:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": "обувь",
+
+
+		"clientINN": "7728551528",
+
+
+		"manager": "Лесогурская Виктория Сергеевна",
+
+
+		"line": "PORTSERVICE",
+
+
+		"client": "СПОРТМАСТЕР ООО",
+
+
+		"clientUID": "4027bec1-a8ea-11ea-8016-005056886559",
+
+
+		"vessel": "AMO",
+
+
+		"department": "ДКП ЮФО",
+
+
+		"container": "HNKU6162761",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "MLTRLS2310351",
+
+
+		"destination": "KUMPORT"
+
+
+	},{
+
+
+		"voyage": "2311S",
+
+
+		"voyageDate": "2023-07-27T21:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": "обувь",
+
+
+		"clientINN": "7728551528",
+
+
+		"manager": "Лесогурская Виктория Сергеевна",
+
+
+		"line": "PORTSERVICE",
+
+
+		"client": "СПОРТМАСТЕР ООО",
+
+
+		"clientUID": "4027bec1-a8ea-11ea-8016-005056886559",
+
+
+		"vessel": "AMO",
+
+
+		"department": "ДКП ЮФО",
+
+
+		"container": "HNKU6162761",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "MLTRLS2310351",
+
+
+		"destination": "KUMPORT"
+
+
+	},{
+
+
+		"voyage": "TSS2303E",
+
+
+		"voyageDate": "2023-07-21T04:28:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "SAINT-PETERSBURG",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": "ПОЛИЭТИЛЕН",
+
+
+		"clientINN": "2315094729",
+
+
+		"manager": "Шуваева Елизавета Антоновна",
+
+
+		"line": "CSTAR",
+
+
+		"client": "РУСКОН ООО",
+
+
+		"clientUID": "d5aefa13-3dd3-11ea-800e-005056886559",
+
+
+		"vessel": "TSS SHAMS",
+
+
+		"department": "НОЭ",
+
+
+		"container": "HNKU6161370",
+
+
+		"orderDirection": "EXPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "MASLEDSHA3006051",
+
+
+		"destination": "SHANGHAI"
+
+
+	},{
+
+
+		"voyage": "BARB2023-18N",
+
+
+		"voyageDate": "2023-07-15T21:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": null,
+
+
+		"portDischargeLoading": null,
+
+
+		"HSCode": null,
+
+
+		"containerSize": null,
+
+
+		"cargo": null,
+
+
+		"clientINN": "6163219872",
+
+
+		"manager": "Чемлева Ольга Геннадьевна",
+
+
+		"line": null,
+
+
+		"client": "ЭКСПЕРТ-ТРАНС ООО",
+
+
+		"clientUID": "935bfb62-ac33-4301-a41d-1e373744f7ca",
+
+
+		"vessel": "BARBAROS",
+
+
+		"department": "Реф Эксп",
+
+
+		"container": null,
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": null,
+
+
+		"bl": "BRBRS20231807",
+
+
+		"destination": null
+
+
+	},{
+
+
+		"voyage": "ADSUN142.",
+
+
+		"voyageDate": "2023-07-12T21:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": null,
+
+
+		"clientINN": "2315094729",
+
+
+		"manager": "Давыдова Мария Владимировна",
+
+
+		"line": "ADMIRAL CONTAINER TRANSPORT S.A.",
+
+
+		"client": "РУСКОН ООО",
+
+
+		"clientUID": "d5aefa13-3dd3-11ea-800e-005056886559",
+
+
+		"vessel": "ADMIRAL SUN",
+
+
+		"department": "НМКК",
+
+
+		"container": "LCGU8075854",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "AT2301103337",
+
+
+		"destination": "EVYAP"
+
+
+	},{
+
+
+		"voyage": "ORITAINS21N",
+
+
+		"voyageDate": "2023-07-12T11:00:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": null,
+
+
+		"clientINN": "2315222459",
+
+
+		"manager": "Николаева Валерия Николаевна",
+
+
+		"line": "RUSCON LINE",
+
+
+		"client": "ЛОГИСТИЧЕСКИЙ ЦЕНТР ООО",
+
+
+		"clientUID": "bf174770-ae70-4ccd-aa3f-b6de143e0729",
+
+
+		"vessel": "ORITA",
+
+
+		"department": "НОЭ",
+
+
+		"container": "ACTU4202712",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "RLISTNVS0727C",
+
+
+		"destination": "AMBARLI"
+
+
+	},{
+
+
+		"voyage": "2321S",
+
+
+		"voyageDate": "2023-07-09T21:57:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": "2701119000",
+
+
+		"containerSize": "40",
+
+
+		"cargo": "АНТРАЦИТ",
+
+
+		"clientINN": "Нерезидент РФ",
+
+
+		"manager": "Лутченко Анна Александровна",
+
+
+		"line": "HUB SHIPPING",
+
+
+		"client": "CARBOCON DMCC",
+
+
+		"clientUID": "130962d4-eefb-430b-befb-c19731ffc81f",
+
+
+		"vessel": "ZAGOR",
+
+
+		"department": "ДКП ЮФО",
+
+
+		"container": "CULU6198559",
+
+
+		"orderDirection": "EXPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "RB60RN23000339",
+
+
+		"destination": "AMBARLI - ISTANBUL"
+
+
+	},{
+
+
+		"voyage": "OYS2201N",
+
+
+		"voyageDate": "2023-01-02T07:12:00Z",
+
+
+		"isFreight": "Нет",
+
+
+		"containerCount": "1",
+
+
+		"portDischargeLoading": "NOVOROSSIYSK",
+
+
+		"HSCode": null,
+
+
+		"containerSize": "40",
+
+
+		"cargo": null,
+
+
+		"clientINN": "2315116450",
+
+
+		"manager": "Новицкая Юлия Юрьевна",
+
+
+		"line": "RUSCON LINE",
+
+
+		"client": "НОВАСТАР ООО",
+
+
+		"clientUID": "eda3434c-3dd3-11ea-800e-005056886559",
+
+
+		"vessel": "OYSTER",
+
+
+		"department": "КТК",
+
+
+		"container": "HJMU1575698",
+
+
+		"orderDirection": "IMPORT",
+
+
+		"orderNumber": "ДКА-0021522",
+
+
+		"containerType": "HC",
+
+
+		"bl": "RCTCNNVS2510362C",
+
+
+		"destination": "AMBARLI"
+
+
+	}]
