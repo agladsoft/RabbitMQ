@@ -1,23 +1,87 @@
-import pika
+import os
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+
+LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
+DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
+
+TABLE_NAMES: dict = {
+    "СписокКонтрагентов":
+        "counterparties",
+    "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту":
+        "datacore_freight",
+    "ОтчетНатуральныеПоказателиПоСделкамИСегментам":
+        "natural_indicators_by_contracts_segments",
+    "ОтчетПоПоручениям":
+        "orders_report",
+    "ОбщийОтчетПоАвтовывозу":
+        "auto_pickup_general_report",
+    "ВладельцыКонтейнеров":
+        "transport_units",
+    "СписокКоносаментов":
+        "consignments",
+    "РегистрСведенийПланПродаж":
+        "sales_plan",
+    "ОтчетПоНатуральнымНаОсновеОперацийПоФактическимДатам":
+        "natural_indicators_by_transaction_fact_date",
+    "РегистрСведенийКонтрагентыРазвитияПоЦФО":
+        "development_counterparty_by_department",
+    "ОтчетExportBookings":
+        "export_bookings",
+    "ОтчетImportBookings":
+        "import_bookings",
+    "ОтчетПоЗавершеннымПеретаркам":
+        "completed_repackages_report",
+    "ОтчетАвтовизиты":
+        "autovisits",
+    "ОтчетПоОбращениямВПЭО":
+        "accounting_documents_requests",
+    "ОтчетЕжедневнаяСводка":
+        "daily_summary",
+    "ОтчетПоЖДПеревозкамМаркетингПоОперациям":
+        "rzhd_by_operations_report",
+    "ОтчетПоМаржинальностиСделок":
+        "orders_marginality_report"
+}
+
+# os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
+# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/docker_project/RabbitMQ'
 
 
-class RabbitMq:
-    def __init__(self,file_path=None):
-        self.user = 'rabbitmq'
-        self.host = '10.23.4.199'
-        self.password = '8KZ3wXA5W2rP'
-        self.exchange = 'DC_TEST_EX'
-        self.routing_key = 'DC_TEST_RT'
-        self.durable = True
-        self.queue_name = 'DC_TEST_Q'
+def get_my_env_var(var_name: str) -> str:
+    try:
+        return os.environ[var_name]
+    except KeyError as e:
+        raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
 
-    def connect_rabbit(self):
-        credentials = pika.PlainCredentials(self.user, self.password)
-        parameters = pika.ConnectionParameters(self.host,
-                                               5672,
-                                               '/',
-                                               credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        return channel, connection
 
+def get_file_handler(name: str) -> logging.FileHandler:
+    log_dir_name: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
+    if not os.path.exists(log_dir_name):
+        os.mkdir(log_dir_name)
+    file_handler: logging.FileHandler = logging.FileHandler(f"{log_dir_name}/{name}.log")
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
+    return file_handler
+
+
+def get_stream_handler():
+    stream_handler: logging.StreamHandler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return stream_handler
+
+
+def get_logger(name: str) -> logging.getLogger:
+    logger: logging.getLogger = logging.getLogger(name)
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    logger.addHandler(get_file_handler(name))
+    logger.addHandler(get_stream_handler())
+    logger.setLevel(logging.INFO)
+    return logger
+
+
+class MissingEnvironmentVariable(Exception):
+    pass
