@@ -9,8 +9,8 @@ class RabbitMq:
         self.user = 'rabbitmq'
         self.host = '10.23.4.199'
         self.password = '8KZ3wXA5W2rP'
-        self.exchange = 'DC_TEST_EX'
-        self.routing_key = 'DC_TEST_RT'
+        self.exchange = get_my_env_var('EXCHANGE')
+        self.routing_key = get_my_env_var('ROUTING_KEY')
         self.durable = True
         self.queue_name = get_my_env_var('QUEUE_NAME')
         self.time_sleep = 10
