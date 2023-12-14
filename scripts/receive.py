@@ -12,7 +12,7 @@ from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from typing import Tuple, Union, Optional, Any
+from typing import Tuple, Union, Optional, Any, List
 from pika.adapters.blocking_connection import BlockingChannel
 
 date_formats: tuple = (
@@ -103,9 +103,10 @@ class Receive(RabbitMq):
         :return:
         """
         if isinstance(msg, (bytes, bytearray)):
-            file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/{datetime.now()}-text_msg.json"
-            fle: Path = Path(file_name)
             json_msg = json.loads(msg.decode('utf8'))
+            file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/" \
+                             f"{datetime.now()}-{json_msg['header']['report']}-text_msg.json"
+            fle: Path = Path(file_name)
             if not os.path.exists(os.path.dirname(fle)):
                 os.makedirs(os.path.dirname(fle))
             with open(file_name, 'w') as file:
@@ -130,7 +131,7 @@ class Receive(RabbitMq):
             if original_date_string:
                 d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
         list_columns_rabbit: list = list(data[0].keys())
-        data_core.check_difference_columns(list_columns_db, list_columns_rabbit)
+        data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
         self.write_to_json(data, eng_table_name)
         return file_name
 
@@ -153,7 +154,7 @@ class Receive(RabbitMq):
             return data, file_name, data_core
         return data, None, data_core
 
-    def write_to_json(self, msg: str, eng_table_name, dir_name: str = "json") -> None:
+    def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
         """
         Write data to json file
         :param msg:
@@ -233,9 +234,17 @@ class DataCoreClient(Receive):
         if original_date_string:
             data[original_date_string] = ''
 
-    def check_difference_columns(self, list_columns_db: list, list_columns_rabbit: list) -> None:
+    def check_difference_columns(
+            self,
+            data: List[dict],
+            eng_table_name: str,
+            list_columns_db: list,
+            list_columns_rabbit: list
+    ) -> None:
         """
 
+        :param data:
+        :param eng_table_name:
         :param list_columns_db:
         :param list_columns_rabbit:
         :return:
@@ -245,6 +254,7 @@ class DataCoreClient(Receive):
         if (diff_db or diff_rabbit) and (diff_db != ['client_uid'] and diff_rabbit != ['clientUID']):
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
+            self.write_to_json(data, eng_table_name, dir_name="errors")
             raise AssertionError("Stop consuming because columns is different")
 
     def connect_to_db(self) -> Client:
