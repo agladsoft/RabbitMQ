@@ -43,7 +43,9 @@ TABLE_NAMES: dict = {
     "ОтчетПоЖДПеревозкамМаркетингПоОперациям":
         "rzhd_by_operations_report",
     "ОтчетПоМаржинальностиСделок":
-        "orders_marginality_report"
+        "orders_marginality_report",
+    "ОтчетНатуральныеПоказателиПриемаИОтправкиПоЖД_TEU":
+        "natural_indicators_of_railway_reception_and_dispatch"
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
