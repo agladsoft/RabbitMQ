@@ -18,7 +18,8 @@ class RabbitMq:
 
     def connect_rabbit(self):
         credentials = pika.PlainCredentials(self.user, self.password)
-        parameters = pika.ConnectionParameters(self.host, 5672, '/', credentials, heartbeat=18000)
+        parameters = pika.ConnectionParameters(self.host, 5672, '/', credentials, heartbeat=18000,
+                                               connection_attempts=3)
         connection = pika.BlockingConnection(parameters)
         self.channel = connection.channel()
         return connection
