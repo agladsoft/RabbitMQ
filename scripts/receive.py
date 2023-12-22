@@ -863,6 +863,68 @@ class OrdersMarginalityReport(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return None
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        numeric_columns: list = ['container_size', 'container_count', 'teu', 'internal_customs_transit']
+        date_columns: list = ['date']
+
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+
+
+class Accounts(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "order_number"
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        numeric_columns: list = ['profit_account_rub', 'profit_account']
+        date_columns: list = ['date']
+
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+
+
 if __name__ == '__main__':
     CLASSES: list = [
         CounterParties,
@@ -882,7 +944,9 @@ if __name__ == '__main__':
         AccountingDocumentsRequests,
         DailySummary,
         RZHDOperationsReport,
-        OrdersMarginalityReport
+        OrdersMarginalityReport,
+        NaturalIndicatorsRailwayReceptionDispatch,
+        Accounts
     ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name
