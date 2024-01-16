@@ -317,7 +317,7 @@ class DataCoreClient(Receive):
             self.logger.info("Success updated all `is_obsolete` key")
         self.logger.info("Data processing in the database is completed")
 
-    def delete_deal(self) -> None:
+    def delete_old_deals(self) -> None:
         """
         Deleting an is_obsolete key transaction.
         :return:
