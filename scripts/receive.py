@@ -306,14 +306,22 @@ class DataCoreClient(Receive):
         """)
         self.logger.info("Success updated `is_obsolete` key on `False`")
         if self.deal:
-            group_list: list = list({dictionary[self.deal]: dictionary for dictionary in data}.values())
+            group_list: List[dict] = [
+                list({tuple(dictionary[key] for key in self.deal): dictionary}.values())[0]
+                for dictionary in data
+            ]
             for item in group_list:
-                self.client.query(f"""
-                    ALTER TABLE {self.table} 
-                    UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}'
-                    WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false 
-                    AND {self.deal}='{item[self.deal]}'
-                """)
+                query: str = f"ALTER TABLE {self.table} " \
+                        f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
+                        f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false "
+                for key in self.deal:
+                    if isinstance(item[key], str):
+                        query += f"AND {key}='{item[key]}' "
+                    elif item[key] is None:
+                        query += f"AND {key} is NULL "
+                    else:
+                        query += f"AND {key}={item[key]} "
+                self.client.query(query)
             self.logger.info("Success updated all `is_obsolete` key")
         self.logger.info("Data processing in the database is completed")
 
@@ -344,7 +352,7 @@ class DataCoreFreight(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -380,7 +388,7 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -411,7 +419,7 @@ class CounterParties(DataCoreClient):
 
     @property
     def deal(self):
-        return "rc_uid"
+        return ["rc_uid"]
 
 
 class OrdersReport(DataCoreClient):
@@ -424,7 +432,7 @@ class OrdersReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -452,7 +460,7 @@ class AutoPickupGeneralReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -504,7 +512,7 @@ class Consignments(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -535,7 +543,7 @@ class SalesPlan(DataCoreClient):
 
     @property
     def deal(self):
-        return None
+        return ["direction", "client_uid", "month", "year", "department"]
 
     def change_columns(self, data: dict) -> None:
         """
@@ -559,7 +567,7 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -617,7 +625,7 @@ class ExportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -648,7 +656,7 @@ class ImportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -713,7 +721,7 @@ class AutoVisits(DataCoreClient):
 
     @property
     def deal(self):
-        return "queue_id"
+        return ["queue_id"]
 
     @property
     def original_date_string(self):
@@ -746,7 +754,7 @@ class AccountingDocumentsRequests(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -776,7 +784,7 @@ class DailySummary(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -807,7 +815,7 @@ class RZHDOperationsReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -838,7 +846,7 @@ class OrdersMarginalityReport(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
@@ -904,7 +912,7 @@ class Accounts(DataCoreClient):
 
     @property
     def deal(self):
-        return "order_number"
+        return ["order_number"]
 
     @property
     def original_date_string(self):
