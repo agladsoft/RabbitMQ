@@ -88,9 +88,9 @@ class Receive(RabbitMq):
             if delivery_tag:
                 self.channel.basic_ack(delivery_tag=delivery_tag)
             self.save_text_msg(body)
-            data, file_name, data_core = self.read_json(body)
+            data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
-                data_core.count_number_loaded_rows(data, len(data), file_name)
+                data_core.count_number_loaded_rows(data, len(data), file_name, key_deals)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
@@ -112,13 +112,12 @@ class Receive(RabbitMq):
             with open(file_name, 'w') as file:
                 json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
-    def parse_data(self, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
+    def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         """
 
         :param data:
         :param data_core:
         :param eng_table_name:
-        :param key_deals:
         :return:
         """
         file_name: str = f"data_core_{datetime.now()}.json"
@@ -135,11 +134,9 @@ class Receive(RabbitMq):
             list_columns_rabbit: list = list(data[0].keys())
             data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
             self.write_to_json(data, eng_table_name)
-        else:
-            data_core.delete_old_deals(cond=f"key_id='{key_deals}'")
         return file_name
 
-    def read_json(self, msg: str) -> Tuple[list, Optional[str], Any]:
+    def read_json(self, msg: str) -> Tuple[list, Optional[str], Any, str]:
         """
         Decoding a message and working with data.
         :param msg:
@@ -155,9 +152,9 @@ class Receive(RabbitMq):
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core()
-            file_name: str = self.parse_data(data, data_core, eng_table_name, key_deals)
-            return data, file_name, data_core
-        return data, None, data_core
+            file_name: str = self.parse_data(data, data_core, eng_table_name)
+            return data, file_name, data_core, key_deals
+        return data, None, data_core, key_deals
 
     def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
         """
@@ -285,7 +282,7 @@ class DataCoreClient(Receive):
         described_table = self.client.query(f"DESCRIBE TABLE {self.table}")
         return described_table.result_columns[0]
 
-    def count_number_loaded_rows(self, data: list, count_rows: int, file_name: str) -> None:
+    def count_number_loaded_rows(self, data: list, count_rows: int, file_name: str, key_deals: str) -> None:
         """
         Counting the number of rows to update transaction data.
         :return:
@@ -295,11 +292,11 @@ class DataCoreClient(Receive):
                 f"SELECT count(*) FROM {self.table} WHERE original_file_parsed_on='{file_name}'"
         ).result_rows[0][0] and datetime.now() - datetime_start < timedelta(minutes=60):
             self.logger.info("The data has not yet been uploaded to the database")
-            time.sleep(60)
+            time.sleep(5)
         self.logger.info("The data has been uploaded to the database")
-        self.update_status(data, file_name)
+        self.update_status(data, file_name, key_deals)
 
-    def update_status(self, data: list, file_name: str) -> None:
+    def update_status(self, data: list, file_name: str, key_deals: str) -> None:
         """
         Updating the transaction by parameters.
         :return:
@@ -310,24 +307,18 @@ class DataCoreClient(Receive):
             WHERE original_file_parsed_on='{file_name}'
         """)
         self.logger.info("Success updated `is_obsolete` key on `False`")
-        if self.deal:
-            group_list: List[dict] = [
-                list({tuple(dictionary[key] for key in self.deal): dictionary}.values())[0]
-                for dictionary in data
-            ]
-            for item in group_list:
-                query: str = f"ALTER TABLE {self.table} " \
-                        f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
-                        f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false "
-                for key in self.deal:
-                    if isinstance(item[key], str):
-                        query += f"AND {key}='{item[key]}' "
-                    elif item[key] is None:
-                        query += f"AND {key} is NULL "
-                    else:
-                        query += f"AND {key}={item[key]} "
-                self.client.query(query)
-            self.logger.info("Success updated all `is_obsolete` key")
+        for item in data:
+            query: str = f"ALTER TABLE {self.table} " \
+                    f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
+                    f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
+                         f"AND {self.deal}='{item[self.deal]}'"
+            self.client.query(query)
+        if not data:
+            query: str = f"ALTER TABLE {self.table} " \
+                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now()}' " \
+                         f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
+                         f"AND {self.deal}='{key_deals}'"
+            self.client.query(query)
         self.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
@@ -357,7 +348,7 @@ class DataCoreFreight(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -393,7 +384,7 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -424,7 +415,7 @@ class CounterParties(DataCoreClient):
 
     @property
     def deal(self):
-        return ["rc_uid"]
+        return "key_id"
 
 
 class OrdersReport(DataCoreClient):
@@ -437,7 +428,7 @@ class OrdersReport(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -465,7 +456,7 @@ class AutoPickupGeneralReport(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -504,7 +495,7 @@ class TransportUnits(DataCoreClient):
 
     @property
     def deal(self):
-        return None
+        return "key_id"
 
 
 class Consignments(DataCoreClient):
@@ -517,7 +508,7 @@ class Consignments(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -548,7 +539,7 @@ class SalesPlan(DataCoreClient):
 
     @property
     def deal(self):
-        return ["direction", "client_uid", "month", "year", "department"]
+        return "key_id"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -572,7 +563,7 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -606,7 +597,7 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
 
     @property
     def deal(self):
-        return None
+        return "key_id"
 
     def change_columns(self, data: dict) -> None:
         """
@@ -630,7 +621,7 @@ class ExportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -661,7 +652,7 @@ class ImportBookings(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -692,7 +683,7 @@ class CompletedRepackagesReport(DataCoreClient):
 
     @property
     def deal(self):
-        return None
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -726,7 +717,7 @@ class AutoVisits(DataCoreClient):
 
     @property
     def deal(self):
-        return ["queue_id"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -759,7 +750,7 @@ class AccountingDocumentsRequests(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -789,7 +780,7 @@ class DailySummary(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -820,7 +811,7 @@ class RZHDOperationsReport(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -851,7 +842,7 @@ class OrdersMarginalityReport(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -886,7 +877,7 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
 
     @property
     def deal(self):
-        return None
+        return "key_id"
 
     @property
     def original_date_string(self):
@@ -917,7 +908,7 @@ class Accounts(DataCoreClient):
 
     @property
     def deal(self):
-        return ["order_number"]
+        return "key_id"
 
     @property
     def original_date_string(self):
