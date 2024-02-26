@@ -112,12 +112,13 @@ class Receive(RabbitMq):
             with open(file_name, 'w') as file:
                 json.dump(json_msg, file, indent=4, ensure_ascii=False)
 
-    def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
+    def parse_data(self, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
         """
 
         :param data:
         :param data_core:
         :param eng_table_name:
+        :param key_deals:
         :return:
         """
         file_name: str = f"data_core_{datetime.now()}.json"
@@ -130,9 +131,12 @@ class Receive(RabbitMq):
             data_core.change_columns(d)
             if original_date_string:
                 d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
-        list_columns_rabbit: list = list(data[0].keys())
-        data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
-        self.write_to_json(data, eng_table_name)
+        if data:
+            list_columns_rabbit: list = list(data[0].keys())
+            data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
+            self.write_to_json(data, eng_table_name)
+        else:
+            data_core.delete_old_deals(cond=f"key_id='{key_deals}'")
         return file_name
 
     def read_json(self, msg: str) -> Tuple[list, Optional[str], Any]:
@@ -144,13 +148,14 @@ class Receive(RabbitMq):
         msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
+        key_deals: str = all_data.get("header", {}).get("key_id")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = all_data.get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core()
-            file_name: str = self.parse_data(data, data_core, eng_table_name)
+            file_name: str = self.parse_data(data, data_core, eng_table_name, key_deals)
             return data, file_name, data_core
         return data, None, data_core
 
@@ -325,12 +330,12 @@ class DataCoreClient(Receive):
             self.logger.info("Success updated all `is_obsolete` key")
         self.logger.info("Data processing in the database is completed")
 
-    def delete_old_deals(self) -> None:
+    def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
         """
         Deleting an is_obsolete key transaction.
         :return:
         """
-        self.client.query(f"DELETE FROM {self.table} WHERE is_obsolete=true")
+        self.client.query(f"DELETE FROM {self.table} WHERE {cond}")
         self.logger.info("Successfully deleted old transaction data")
 
     def __exit__(self, exception_type, exception_val, trace):
