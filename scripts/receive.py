@@ -19,7 +19,8 @@ date_formats: tuple = (
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%dT%H:%M:%S%z",
     "%d.%m.%Y %H:%M:%S",
-    "%d.%m.%Y"
+    "%d.%m.%Y",
+    "%Y-%m-%d"
 )
 
 
@@ -87,9 +88,9 @@ class Receive(RabbitMq):
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
             if delivery_tag:
                 self.channel.basic_ack(delivery_tag=delivery_tag)
-            data, file_name, data_core, key_deals = self.read_json(body)
+            all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
-                data_core.insert_rows(data, file_name, key_deals)
+                data_core.handle_rows(all_data, data, file_name, key_deals)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
@@ -134,7 +135,7 @@ class Receive(RabbitMq):
             data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
         return file_name
 
-    def read_json(self, msg: str) -> Tuple[list, Optional[str], Any, str]:
+    def read_json(self, msg: str) -> Tuple[dict, list, Optional[str], Any, str]:
         """
         Decoding a message and working with data.
         :param msg:
@@ -151,8 +152,8 @@ class Receive(RabbitMq):
             data_core.table = eng_table_name
             data_core: Any = data_core()
             file_name: str = self.parse_data(data, data_core, eng_table_name)
-            return data, file_name, data_core, key_deals
-        return data, None, [], data_core, key_deals
+            return all_data, data, file_name, data_core, key_deals
+        return all_data, data, None, [], data_core, key_deals
 
     def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
         """
@@ -216,7 +217,7 @@ class DataCoreClient(Receive):
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
                     return str(date_db_access)
-                return str(date_file)
+                return date_file
         return date
 
     @staticmethod
@@ -280,7 +281,7 @@ class DataCoreClient(Receive):
         described_table = self.client.query(f"DESCRIBE TABLE {self.table}")
         return described_table.result_columns[0]
 
-    def insert_rows(self, data: list, file_name: str, key_deals: str) -> None:
+    def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
         """
         Counting the number of rows to update transaction data.
         :return:
@@ -291,7 +292,7 @@ class DataCoreClient(Receive):
             self.update_status(data, file_name, key_deals)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}")
-            self.write_to_json(data, self.table, dir_name="errors")
+            self.write_to_json(all_data, self.table, dir_name="errors")
 
     def update_status(self, data: list, file_name: str, key_deals: str) -> None:
         """
