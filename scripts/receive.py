@@ -285,9 +285,13 @@ class DataCoreClient(Receive):
         Counting the number of rows to update transaction data.
         :return:
         """
-        self.client.insert_df(table=self.table, df=pd.DataFrame(data))
-        self.logger.info("The data has been uploaded to the database")
-        self.update_status(data, file_name, key_deals)
+        try:
+            self.client.insert_df(table=self.table, df=pd.DataFrame(data))
+            self.logger.info("The data has been uploaded to the database")
+            self.update_status(data, file_name, key_deals)
+        except Exception as ex:
+            self.logger.error(f"Exception is {ex}")
+            self.write_to_json(data, self.table, dir_name="errors")
 
     def update_status(self, data: list, file_name: str, key_deals: str) -> None:
         """
