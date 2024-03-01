@@ -1,13 +1,12 @@
 import re
 import sys
-import time
 import json
 import contextlib
+import pandas as pd
 from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
 from datetime import datetime
-from datetime import timedelta
 from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
@@ -29,6 +28,7 @@ class Receive(RabbitMq):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                     + str(datetime.now().date()))
+        self.count_message: int = 0
 
     def read_msg(self) -> None:
         """
@@ -79,18 +79,17 @@ class Receive(RabbitMq):
         :return:
         """
         try:
+            self.count_message += 1
             self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                         + str(datetime.now().date()))
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
-                             f"body_message called")
-            time.sleep(self.time_sleep)
+                             f"body_message called. Count messages is {self.count_message}")
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
             if delivery_tag:
                 self.channel.basic_ack(delivery_tag=delivery_tag)
-            self.save_text_msg(body)
             data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
-                data_core.count_number_loaded_rows(data, len(data), file_name, key_deals)
+                data_core.insert_rows(data, file_name, key_deals)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
@@ -133,7 +132,6 @@ class Receive(RabbitMq):
         if data:
             list_columns_rabbit: list = list(data[0].keys())
             data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
-            self.write_to_json(data, eng_table_name)
         return file_name
 
     def read_json(self, msg: str) -> Tuple[list, Optional[str], Any, str]:
@@ -154,7 +152,7 @@ class Receive(RabbitMq):
             data_core: Any = data_core()
             file_name: str = self.parse_data(data, data_core, eng_table_name)
             return data, file_name, data_core, key_deals
-        return data, None, data_core, key_deals
+        return data, None, [], data_core, key_deals
 
     def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
         """
@@ -231,7 +229,7 @@ class DataCoreClient(Receive):
         :return:
         """
         data['original_file_parsed_on'] = file_name
-        data['is_obsolete'] = None
+        data['is_obsolete'] = False
         data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if original_date_string:
             data[original_date_string] = ''
@@ -282,17 +280,12 @@ class DataCoreClient(Receive):
         described_table = self.client.query(f"DESCRIBE TABLE {self.table}")
         return described_table.result_columns[0]
 
-    def count_number_loaded_rows(self, data: list, count_rows: int, file_name: str, key_deals: str) -> None:
+    def insert_rows(self, data: list, file_name: str, key_deals: str) -> None:
         """
         Counting the number of rows to update transaction data.
         :return:
         """
-        datetime_start: datetime = datetime.now()
-        while count_rows != self.client.query(
-                f"SELECT count(*) FROM {self.table} WHERE original_file_parsed_on='{file_name}'"
-        ).result_rows[0][0] and datetime.now() - datetime_start < timedelta(minutes=60):
-            self.logger.info("The data has not yet been uploaded to the database")
-            time.sleep(5)
+        self.client.insert_df(table=self.table, df=pd.DataFrame(data))
         self.logger.info("The data has been uploaded to the database")
         self.update_status(data, file_name, key_deals)
 
@@ -301,16 +294,10 @@ class DataCoreClient(Receive):
         Updating the transaction by parameters.
         :return:
         """
-        self.client.query(f"""
-            ALTER TABLE {self.table}
-            UPDATE is_obsolete=false
-            WHERE original_file_parsed_on='{file_name}'
-        """)
-        self.logger.info("Success updated `is_obsolete` key on `False`")
         for item in data:
             query: str = f"ALTER TABLE {self.table} " \
-                    f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
-                    f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
+                         f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
+                         f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
                          f"AND {self.deal}='{item[self.deal]}'"
             self.client.query(query)
         if not data:

@@ -1,6 +1,7 @@
 import os
 import logging
 from dotenv import load_dotenv
+from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
@@ -65,7 +66,8 @@ def get_file_handler(name: str) -> logging.FileHandler:
     log_dir_name: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
     if not os.path.exists(log_dir_name):
         os.mkdir(log_dir_name)
-    file_handler: logging.FileHandler = logging.FileHandler(f"{log_dir_name}/{name}.log")
+    file_handler = RotatingFileHandler(filename=f"{log_dir_name}/{name}.log", mode='a', maxBytes=1.5 * pow(1024, 2),
+                                       backupCount=3)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
 

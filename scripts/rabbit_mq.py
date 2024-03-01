@@ -13,7 +13,6 @@ class RabbitMq:
         self.routing_key = get_my_env_var('ROUTING_KEY')
         self.durable = True
         self.queue_name = get_my_env_var('QUEUE_NAME')
-        self.time_sleep = 10
         self.channel: Optional[BlockingChannel] = None
 
     def connect_rabbit(self):
