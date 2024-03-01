@@ -216,7 +216,7 @@ class DataCoreClient(Receive):
                     date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
-                    return str(date_db_access)
+                    return date_db_access
                 return date_file
         return date
 
