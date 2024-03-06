@@ -2,7 +2,6 @@ import re
 import sys
 import json
 import contextlib
-import pandas as pd
 from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
@@ -287,8 +286,11 @@ class DataCoreClient(Receive):
         :return:
         """
         try:
-            self.client.insert_df(table=self.table, df=pd.DataFrame(data))
-            self.logger.info("The data has been uploaded to the database")
+            rows = [list(row.values()) for row in data] if data else [[]]
+            columns = [row for row in data[0]] if data else []
+            if rows and columns:
+                self.client.insert(table=self.table, data=rows, column_names=columns)
+                self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}")
