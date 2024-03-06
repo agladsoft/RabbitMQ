@@ -296,7 +296,7 @@ class DataCoreClient(Receive):
             rows = [[
                 key_deals,
                 datetime.now(),
-                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False)
+                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=4)
             ]]
             columns = ["key_id", "datetime", "message"]
             self.client.insert(table="all_messages", data=rows, column_names=columns)
