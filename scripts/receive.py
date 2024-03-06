@@ -24,6 +24,12 @@ date_formats: tuple = (
 )
 
 
+def serialize_datetime(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError("Type not serializable")
+
+
 class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
@@ -287,10 +293,18 @@ class DataCoreClient(Receive):
         :return:
         """
         try:
-            rows = [list(row.values()) for row in data] if data else [[]]
-            columns = [row for row in data[0]] if data else []
-            if rows and columns:
-                self.client.insert(table=self.table, data=rows, column_names=columns)
+            rows = [[
+                key_deals,
+                datetime.now(),
+                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False)
+            ]]
+            columns = ["key_id", "datetime", "message"]
+            self.client.insert(table="all_messages", data=rows, column_names=columns)
+
+            rows_ = [list(row.values()) for row in data] if data else [[]]
+            columns_ = [row for row in data[0]] if data else []
+            if rows_ and columns_:
+                self.client.insert(table=self.table, data=rows_, column_names=columns_)
                 self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
         except Exception as ex:
