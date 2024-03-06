@@ -5,9 +5,9 @@ import contextlib
 from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
-from datetime import datetime
 from rabbit_mq import RabbitMq
 from pika import BasicProperties
+from datetime import datetime, date
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any, List
@@ -25,7 +25,7 @@ date_formats: tuple = (
 
 
 def serialize_datetime(obj):
-    if isinstance(obj, datetime):
+    if isinstance(obj, datetime) or isinstance(obj, date):
         return obj.isoformat()
     raise TypeError("Type not serializable")
 
