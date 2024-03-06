@@ -294,11 +294,12 @@ class DataCoreClient(Receive):
         """
         try:
             rows = [[
+                self.table,
                 key_deals,
                 datetime.now(),
-                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=4)
+                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
             ]]
-            columns = ["key_id", "datetime", "message"]
+            columns = ["table", "key_id", "datetime", "message"]
             self.client.insert(table="all_messages", data=rows, column_names=columns)
 
             rows_ = [list(row.values()) for row in data] if data else [[]]
