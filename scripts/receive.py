@@ -7,9 +7,9 @@ from pathlib import Path
 from pika.spec import Basic
 from rabbit_mq import RabbitMq
 from pika import BasicProperties
-from datetime import datetime, date
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
+from datetime import datetime, date, timedelta
 from typing import Tuple, Union, Optional, Any, List
 from pika.adapters.blocking_connection import BlockingChannel
 
@@ -208,23 +208,23 @@ class DataCoreClient(Receive):
         """
         pass
 
-    def convert_format_date(self, date: str, data: dict, column, is_datetime: bool = False) -> str:
+    def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> str:
         """
         Convert to a date type.
         """
         for date_format in date_formats:
             with contextlib.suppress(ValueError):
                 if not is_datetime:
-                    date_file: Union[datetime.date, datetime] = datetime.strptime(date, date_format).date()
+                    date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
                     date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 else:
-                    date_file = datetime.strptime(date, date_format)
+                    date_file = datetime.strptime(date_, date_format) + timedelta(hours=3)
                     date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
                     return date_db_access
                 return date_file
-        return date
+        return date_
 
     @staticmethod
     def add_new_columns(data: dict, file_name: str, original_date_string: str) -> None:
@@ -287,30 +287,46 @@ class DataCoreClient(Receive):
         described_table = self.client.query(f"DESCRIBE TABLE {self.table}")
         return described_table.result_columns[0]
 
+    def insert_message(self, all_data: list, key_deals: str, is_success_inserted: bool):
+        """
+
+        :param all_data:
+        :param key_deals:
+        :param is_success_inserted:
+        :return:
+        """
+        rows = [[
+            self.table,
+            self.queue_name,
+            key_deals,
+            datetime.now(),
+            is_success_inserted,
+            json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
+        ]]
+        columns = ["table", "queue", "key_id", "datetime", "is_success", "message"]
+        self.client.insert(table="rmq_log", data=rows, column_names=columns)
+
     def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
         """
         Counting the number of rows to update transaction data.
+        :param all_data:
+        :param data:
+        :param file_name:
+        :param key_deals:
         :return:
         """
         try:
-            rows = [[
-                self.table,
-                key_deals,
-                datetime.now(),
-                json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
-            ]]
-            columns = ["table", "key_id", "datetime", "message"]
-            self.client.insert(table="all_messages", data=rows, column_names=columns)
-
-            rows_ = [list(row.values()) for row in data] if data else [[]]
-            columns_ = [row for row in data[0]] if data else []
-            if rows_ and columns_:
-                self.client.insert(table=self.table, data=rows_, column_names=columns_)
+            rows = [list(row.values()) for row in data] if data else [[]]
+            columns = [row for row in data[0]] if data else []
+            if rows and columns:
+                self.client.insert(table=self.table, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
+            self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}")
             self.write_to_json(all_data, self.table, dir_name="errors")
+            self.insert_message(all_data, key_deals, is_success_inserted=False)
 
     def update_status(self, data: list, file_name: str, key_deals: str) -> None:
         """
