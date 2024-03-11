@@ -946,11 +946,11 @@ class Accounts(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['profit_account_rub', 'profit_account']
+        float_columns: list = ['profit_account_rub', 'profit_account']
         date_columns: list = ['date']
 
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        for column in float_columns:
+            data[column] = float(data.get(column)) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
