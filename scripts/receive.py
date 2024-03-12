@@ -1,6 +1,7 @@
 import re
 import sys
 import json
+import copy
 import contextlib
 from __init__ import *
 from pathlib import Path
@@ -152,7 +153,7 @@ class Receive(RabbitMq):
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
-        data: list = all_data.get("data", [])
+        data: list = copy.deepcopy(all_data).get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
