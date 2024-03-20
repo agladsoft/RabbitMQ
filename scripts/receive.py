@@ -117,7 +117,7 @@ class Receive(RabbitMq):
             if not os.path.exists(os.path.dirname(fle)):
                 os.makedirs(os.path.dirname(fle))
             with open(file_name, 'w') as file:
-                json.dump(json_msg, file, indent=4, ensure_ascii=False)
+                json.dump(json_msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
 
     def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
         """
@@ -176,7 +176,7 @@ class Receive(RabbitMq):
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
         with open(file_name, 'w') as file:
-            json.dump(msg, file, indent=4, ensure_ascii=False)
+            json.dump(msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
 
 
 class DataCoreClient(Receive):
@@ -184,6 +184,10 @@ class DataCoreClient(Receive):
         super().__init__()
         self.client: Client = self.connect_to_db()
         self.removed_columns_db = ['uuid']
+
+    @property
+    def database(self):
+        return self.client.database
 
     @property
     def table(self):
@@ -285,7 +289,7 @@ class DataCoreClient(Receive):
 
         :return:
         """
-        described_table = self.client.query(f"DESCRIBE TABLE {self.table}")
+        described_table = self.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
         return described_table.result_columns[0]
 
     def insert_message(self, all_data: list, key_deals: str, is_success_inserted: bool):
@@ -320,7 +324,7 @@ class DataCoreClient(Receive):
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
-                self.client.insert(table=self.table, data=rows, column_names=columns)
+                self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
@@ -335,13 +339,13 @@ class DataCoreClient(Receive):
         :return:
         """
         for item in data:
-            query: str = f"ALTER TABLE {self.table} " \
+            query: str = f"ALTER TABLE {self.database}.{self.table} " \
                          f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
                          f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
                          f"AND {self.deal}='{item[self.deal]}'"
             self.client.query(query)
         if not data:
-            query: str = f"ALTER TABLE {self.table} " \
+            query: str = f"ALTER TABLE {self.database}.{self.table} " \
                          f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now()}' " \
                          f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
                          f"AND {self.deal}='{key_deals}'"
@@ -353,7 +357,7 @@ class DataCoreClient(Receive):
         Deleting an is_obsolete key transaction.
         :return:
         """
-        self.client.query(f"DELETE FROM {self.table} WHERE {cond}")
+        self.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
         self.logger.info("Successfully deleted old transaction data")
 
     def __exit__(self, exception_type, exception_val, trace):
@@ -956,8 +960,44 @@ class Accounts(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class ManagerEvaluation(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def database(self):
+        return "DO"
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        numeric_columns: list = ['evaluation']
+        date_columns: list = ['evaluation_date']
+
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+
+
 if __name__ == '__main__':
     CLASSES: list = [
+        # Данные по DC
         CounterParties,
         DataCoreFreight,
         NaturalIndicatorsContractsSegments,
@@ -977,7 +1017,10 @@ if __name__ == '__main__':
         RZHDOperationsReport,
         OrdersMarginalityReport,
         NaturalIndicatorsRailwayReceptionDispatch,
-        Accounts
+        Accounts,
+
+        # Данные по оценкам менеджеров
+        ManagerEvaluation
     ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name

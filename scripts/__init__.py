@@ -9,6 +9,7 @@ LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
 
 TABLE_NAMES: dict = {
+    # Данные по DC
     "СписокКонтрагентов":
         "counterparties",
     "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту":
@@ -48,7 +49,11 @@ TABLE_NAMES: dict = {
     "ОтчетНатуральныеПоказателиПриемаИОтправкиПоЖД_TEU":
         "natural_indicators_of_railway_reception_and_dispatch",
     "СуммыСчетовПокупателям":
-        "accounts"
+        "accounts",
+
+    # Данные по оценкам менеджеров
+    "ОценкиМенеджеров":
+        "manager_evaluation"
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
