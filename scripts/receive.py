@@ -301,6 +301,7 @@ class DataCoreClient(Receive):
         :return:
         """
         rows = [[
+            self.database,
             self.table,
             self.queue_name,
             key_deals,
@@ -308,7 +309,7 @@ class DataCoreClient(Receive):
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
-        columns = ["table", "queue", "key_id", "datetime", "is_success", "message"]
+        columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
         self.client.insert(table="rmq_log", data=rows, column_names=columns)
 
     def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
