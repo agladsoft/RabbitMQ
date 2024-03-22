@@ -119,12 +119,14 @@ class Receive(RabbitMq):
             with open(file_name, 'w') as file:
                 json.dump(json_msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
 
-    def parse_data(self, data, data_core: Any, eng_table_name: str) -> str:
+    def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
         """
 
+        :param all_data:
         :param data:
         :param data_core:
         :param eng_table_name:
+        :param key_deals:
         :return:
         """
         file_name: str = f"data_core_{datetime.now()}.json"
@@ -141,11 +143,12 @@ class Receive(RabbitMq):
         except Exception as ex:
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
-            self.write_to_json(data, eng_table_name, dir_name="errors")
+            self.write_to_json(all_data, eng_table_name, dir_name="errors")
+            data_core.insert_message(data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types")
         if data:
             list_columns_rabbit: list = list(data[0].keys())
-            data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
+            data_core.check_difference_columns(all_data, eng_table_name, list_columns_db, list_columns_rabbit, key_deals)
         return file_name
 
     def read_json(self, msg: str) -> Tuple[dict, list, Optional[str], Any, str]:
@@ -164,7 +167,7 @@ class Receive(RabbitMq):
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core()
-            file_name: str = self.parse_data(data, data_core, eng_table_name)
+            file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         return all_data, data, None, [], data_core, key_deals
 
@@ -254,17 +257,19 @@ class DataCoreClient(Receive):
 
     def check_difference_columns(
             self,
-            data: List[dict],
+            all_data: dict,
             eng_table_name: str,
             list_columns_db: list,
-            list_columns_rabbit: list
+            list_columns_rabbit: list,
+            key_deals: str
     ) -> None:
         """
 
-        :param data:
+        :param all_data:
         :param eng_table_name:
         :param list_columns_db:
         :param list_columns_rabbit:
+        :param key_deals:
         :return:
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
@@ -272,7 +277,8 @@ class DataCoreClient(Receive):
         if (diff_db or diff_rabbit) and (diff_db != ['client_uid'] and diff_rabbit != ['clientUID']):
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
-            self.write_to_json(data, eng_table_name, dir_name="errors")
+            self.write_to_json(all_data, eng_table_name, dir_name="errors")
+            self.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because columns is different")
 
     def connect_to_db(self) -> Client:
