@@ -148,7 +148,8 @@ class Receive(RabbitMq):
             raise AssertionError("Stop consuming because receive an error where converting data types")
         if data:
             list_columns_rabbit: list = list(data[0].keys())
-            data_core.check_difference_columns(all_data, eng_table_name, list_columns_db, list_columns_rabbit, key_deals)
+            data_core.check_difference_columns(all_data, eng_table_name, list_columns_db, list_columns_rabbit,
+                                               key_deals)
         return file_name
 
     def read_json(self, msg: str) -> Tuple[dict, list, Optional[str], Any, str]:
@@ -222,7 +223,7 @@ class DataCoreClient(Receive):
         """
         pass
 
-    def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> str:
+    def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> Union[datetime, str]:
         """
         Convert to a date type.
         """
@@ -412,10 +413,8 @@ class DataCoreFreight(DataCoreClient):
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
-        data['voyage_month'] = datetime.strptime(
-            self.convert_format_date(data.get('voyage_month'), data, 'voyage_month'),
-            "%Y-%m-%d"
-        ).month if data.get('voyage_month') else None
+        data['voyage_month'] = self.convert_format_date(data.get('voyage_month'), data, 'voyage_month').month \
+            if data.get('voyage_month') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
