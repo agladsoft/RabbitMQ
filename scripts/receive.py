@@ -144,7 +144,7 @@ class Receive(RabbitMq):
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
-            data_core.insert_message(data, key_deals, is_success_inserted=False)
+            data_core.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types")
         if data:
             list_columns_rabbit: list = list(data[0].keys())
