@@ -132,11 +132,17 @@ class Receive(RabbitMq):
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
-        for d in data:
-            data_core.add_new_columns(d, file_name, original_date_string)
-            data_core.change_columns(d)
-            if original_date_string:
-                d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
+        try:
+            for d in data:
+                data_core.add_new_columns(d, file_name, original_date_string)
+                data_core.change_columns(d)
+                if original_date_string:
+                    d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
+        except Exception as ex:
+            self.logger.error(f"An error was received when converting data types. "
+                              f"Table is {eng_table_name}. Exception is {ex}")
+            self.write_to_json(data, eng_table_name, dir_name="errors")
+            raise AssertionError("Stop consuming because receive an error where converting data types")
         if data:
             list_columns_rabbit: list = list(data[0].keys())
             data_core.check_difference_columns(data, eng_table_name, list_columns_db, list_columns_rabbit)
