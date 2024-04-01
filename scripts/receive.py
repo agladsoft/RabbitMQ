@@ -25,7 +25,7 @@ date_formats: tuple = (
     "%Y-%m-%d"
 )
 tz: pytz.timezone = pytz.timezone("Europe/Moscow")
-tz_utc: pytz.timezone = pytz.timezone("UTC")
+tz_ = pytz.timezone("Etc/GMT+6")
 
 
 def serialize_datetime(obj):
@@ -321,7 +321,7 @@ class DataCoreClient(Receive):
             self.table,
             self.queue_name,
             key_deals,
-            datetime.now(tz=tz_utc),
+            datetime.now(tz=tz_),
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
