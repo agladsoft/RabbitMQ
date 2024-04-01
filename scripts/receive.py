@@ -1,5 +1,6 @@
 import re
 import sys
+import pytz
 import json
 import copy
 import contextlib
@@ -23,6 +24,7 @@ date_formats: tuple = (
     "%d.%m.%Y",
     "%Y-%m-%d"
 )
+tz: pytz.timezone = pytz.timezone("America/New_York")
 
 
 def serialize_datetime(obj):
@@ -35,7 +37,7 @@ class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                    + str(datetime.now().date()))
+                                                    + str(datetime.now(tz=tz).date()))
         self.count_message: int = 0
 
     def read_msg(self) -> None:
@@ -89,7 +91,7 @@ class Receive(RabbitMq):
         try:
             self.count_message += 1
             self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                        + str(datetime.now().date()))
+                                                        + str(datetime.now(tz=tz).date()))
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
@@ -112,7 +114,7 @@ class Receive(RabbitMq):
         if isinstance(msg, (bytes, bytearray)):
             json_msg = json.loads(msg.decode('utf8'))
             file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/" \
-                             f"{datetime.now()}-{json_msg['header']['report']}-text_msg.json"
+                             f"{datetime.now(tz=tz)}-{json_msg['header']['report']}-text_msg.json"
             fle: Path = Path(file_name)
             if not os.path.exists(os.path.dirname(fle)):
                 os.makedirs(os.path.dirname(fle))
@@ -129,7 +131,7 @@ class Receive(RabbitMq):
         :param key_deals:
         :return:
         """
-        file_name: str = f"data_core_{datetime.now()}.json"
+        file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
@@ -180,8 +182,8 @@ class Receive(RabbitMq):
         :param dir_name:
         :return:
         """
-        self.logger.info(f"Saving data to file {datetime.now()}_{eng_table_name}.json")
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now()}_{eng_table_name}.json"
+        self.logger.info(f"Saving data to file {datetime.now(tz=tz)}_{eng_table_name}.json")
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=tz)}_{eng_table_name}.json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
@@ -252,7 +254,7 @@ class DataCoreClient(Receive):
         """
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = False
-        data['is_obsolete_date'] = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        data['is_obsolete_date'] = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
 
@@ -318,7 +320,7 @@ class DataCoreClient(Receive):
             self.table,
             self.queue_name,
             key_deals,
-            datetime.now(),
+            datetime.now(tz=tz),
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
@@ -360,7 +362,7 @@ class DataCoreClient(Receive):
             self.client.query(query)
         if not data:
             query: str = f"ALTER TABLE {self.database}.{self.table} " \
-                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now()}' " \
+                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=tz)}' " \
                          f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
                          f"AND {self.deal}='{key_deals}'"
             self.client.query(query)
@@ -409,7 +411,7 @@ class DataCoreFreight(DataCoreClient):
         numeric_columns: list = ['container_count', 'container_size', 'operation_month']
 
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data, column, is_datetime=True) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
