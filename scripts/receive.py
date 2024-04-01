@@ -183,7 +183,8 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info(f"Saving data to file {datetime.now(tz=tz)}_{eng_table_name}.json")
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=tz)}_{eng_table_name}.json"
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=tz)}_{eng_table_name}" \
+                         f".json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
@@ -411,7 +412,7 @@ class DataCoreFreight(DataCoreClient):
         numeric_columns: list = ['container_count', 'container_size', 'operation_month']
 
         for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column, is_datetime=True) if data.get(column) else None
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
 
