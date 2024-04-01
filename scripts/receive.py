@@ -24,7 +24,7 @@ date_formats: tuple = (
     "%d.%m.%Y",
     "%Y-%m-%d"
 )
-tz: pytz.timezone = pytz.timezone("America/New_York")
+tz: pytz.timezone = pytz.timezone("Europe/Moscow")
 
 
 def serialize_datetime(obj):
