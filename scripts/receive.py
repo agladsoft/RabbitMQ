@@ -173,6 +173,7 @@ class Receive(RabbitMq):
             data_core: Any = data_core()
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
+        self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         return all_data, data, None, data_core, key_deals
 
     def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
