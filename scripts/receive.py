@@ -12,7 +12,7 @@ from pika import BasicProperties
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from datetime import datetime, date, timedelta
-from typing import Tuple, Union, Optional, Any, List
+from typing import Tuple, Union, Optional, Any
 from pika.adapters.blocking_connection import BlockingChannel
 
 date_formats: tuple = (
@@ -163,7 +163,6 @@ class Receive(RabbitMq):
         msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
-        self.logger.info(f"Russian table is {rus_table_name}")
         key_deals: str = all_data.get("header", {}).get("key_id")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
@@ -176,7 +175,7 @@ class Receive(RabbitMq):
         self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         return all_data, data, None, data_core, key_deals
 
-    def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
+    def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
         """
         Write data to json file
         :param msg:
@@ -310,7 +309,7 @@ class DataCoreClient(Receive):
         described_table = self.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
         return described_table.result_columns[0]
 
-    def insert_message(self, all_data: list, key_deals: str, is_success_inserted: bool):
+    def insert_message(self, all_data: dict, key_deals: str, is_success_inserted: bool):
         """
 
         :param all_data:
