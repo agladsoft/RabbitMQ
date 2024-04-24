@@ -163,6 +163,7 @@ class Receive(RabbitMq):
         msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
+        self.logger.info(f"Russian table is {rus_table_name}")
         key_deals: str = all_data.get("header", {}).get("key_id")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
@@ -172,7 +173,7 @@ class Receive(RabbitMq):
             data_core: Any = data_core()
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
-        return all_data, data, None, [], data_core, key_deals
+        return all_data, data, None, data_core, key_deals
 
     def write_to_json(self, msg: List[dict], eng_table_name: str, dir_name: str = "json") -> None:
         """
