@@ -237,7 +237,7 @@ class DataCoreClient(Receive):
                     date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
                     date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 else:
-                    date_file = datetime.strptime(date_, date_format) + timedelta(hours=3)
+                    date_file = datetime.strptime(date_, date_format)
                     date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
