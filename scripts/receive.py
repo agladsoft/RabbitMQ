@@ -317,6 +317,8 @@ class DataCoreClient(Receive):
         :param is_success_inserted:
         :return:
         """
+        len_data: int = 100
+        all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
         rows = [[
             self.database,
             self.table,
