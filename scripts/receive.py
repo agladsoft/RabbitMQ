@@ -237,7 +237,7 @@ class DataCoreClient(Receive):
                     date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
                     date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 else:
-                    date_file = datetime.strptime(date_, date_format) + timedelta(hours=3)
+                    date_file = datetime.strptime(date_, date_format)
                     date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
@@ -317,6 +317,8 @@ class DataCoreClient(Receive):
         :param is_success_inserted:
         :return:
         """
+        len_data: int = 100
+        all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
         rows = [[
             self.database,
             self.table,
@@ -976,6 +978,30 @@ class Accounts(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class FreightRates(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        numeric_columns: list = ['rate']
+
+        for column in numeric_columns:
+            data[column] = int(data.get(column)) if data.get(column) else None
+
+
 class ManagerEvaluation(DataCoreClient):
     def __init__(self):
         super().__init__()
@@ -1011,6 +1037,35 @@ class ManagerEvaluation(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class ReferenceCounterparties(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def database(self):
+        return "DO"
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        bool_columns: list = ['is_control', 'is_foreign_company', 'deletion_flag']
+
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
+
+
 if __name__ == '__main__':
     CLASSES: list = [
         # Данные по DC
@@ -1034,9 +1089,13 @@ if __name__ == '__main__':
         OrdersMarginalityReport,
         NaturalIndicatorsRailwayReceptionDispatch,
         Accounts,
+        FreightRates,
 
         # Данные по оценкам менеджеров
-        ManagerEvaluation
+        ManagerEvaluation,
+
+        # Данные по справочнику контрагентов
+        ReferenceCounterparties
     ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name

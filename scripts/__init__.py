@@ -50,14 +50,20 @@ TABLE_NAMES: dict = {
         "natural_indicators_of_railway_reception_and_dispatch",
     "СуммыСчетовПокупателям":
         "accounts",
+    "СтавкиФрахта":
+        "freight_rates",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
-        "manager_evaluation"
+        "manager_evaluation",
+
+    # Данные по справочнику контрагентов
+    "СправочникКонтрагентовДО":
+        "reference_counterparties",
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
-# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/docker_project/RabbitMQ'
+# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
 
 
 def get_my_env_var(var_name: str) -> str:
