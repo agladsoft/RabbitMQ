@@ -71,8 +71,8 @@ def get_file_handler(name: str) -> logging.FileHandler:
     log_dir_name: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
     if not os.path.exists(log_dir_name):
         os.mkdir(log_dir_name)
-    file_handler = RotatingFileHandler(filename=f"{log_dir_name}/{name}.log", mode='a', maxBytes=10.5 * pow(1024, 2),
-                                       backupCount=5)
+    file_handler = RotatingFileHandler(filename=f"{log_dir_name}/{name}.log", mode='a', maxBytes=20.5 * pow(1024, 2),
+                                       backupCount=20)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
 
