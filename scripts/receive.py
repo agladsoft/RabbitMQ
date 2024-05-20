@@ -95,11 +95,15 @@ class Receive(RabbitMq):
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
-            if delivery_tag:
-                self.channel.basic_ack(delivery_tag=delivery_tag)
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
+                self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
                 data_core.handle_rows(all_data, data, file_name, key_deals)
+            else:
+                data_core_client = DataCoreClient
+                data_core_client.database = None
+                data_core_client.table = all_data.get("header", {}).get("report")
+                data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
@@ -202,6 +206,10 @@ class DataCoreClient(Receive):
     @property
     def database(self):
         return self.client.database
+
+    @database.setter
+    def database(self, database):
+        self.database: str = database
 
     @property
     def table(self):
