@@ -1025,7 +1025,8 @@ class FreightRates(DataCoreClient):
             data["client"] = data.pop(old_key)
 
         for column in float_columns:
-            data[column] = float(data.get(column).replace(",", ".")) if data.get(column) else None
+            data[column] = float(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column)).replace(",", ".")) \
+                if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))) if data.get(column) else None
         for column in date_columns:
