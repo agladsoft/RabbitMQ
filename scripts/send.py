@@ -1,3 +1,4 @@
+import os
 import glob
 from rabbit_mq import RabbitMq
 
@@ -24,5 +25,5 @@ class Send(RabbitMq):
 
 if __name__ == '__main__':
     send = Send()
-    for filename in glob.iglob('/home/timur/sambashare/RabbitMQ/msg/*.json'):
+    for filename in glob.iglob(f'{os.environ["XL_IDP_PATH_RABBITMQ"]}/msg/*.json'):
         send.main(filename)
