@@ -298,7 +298,7 @@ class DataCoreClient(Receive):
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
         diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
-        if (diff_db or diff_rabbit) and (diff_db != ['client_uid'] and diff_rabbit != ['clientUID']):
+        if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
