@@ -1015,7 +1015,8 @@ class FreightRates(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['rate', 'oversized_width', 'oversized_height', 'oversized_length']
+        float_columns: list = ['rate']
+        numeric_columns: list = ['oversized_width', 'oversized_height', 'oversized_length']
         date_columns: list = ['expiration_date', 'start_date']
         bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate']
 
@@ -1023,6 +1024,8 @@ class FreightRates(DataCoreClient):
         if old_key in data:
             data["client"] = data.pop(old_key)
 
+        for column in float_columns:
+            data[column] = float(data.get(column).replace(",", ".")) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))) if data.get(column) else None
         for column in date_columns:
