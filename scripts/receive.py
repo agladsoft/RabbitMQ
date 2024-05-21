@@ -1016,6 +1016,9 @@ class FreightRates(DataCoreClient):
         :return:
         """
         numeric_columns: list = ['rate']
+        old_key = "сlient"
+        if old_key in data:
+            data["client"] = data.pop(old_key)
 
         for column in numeric_columns:
             data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))) if data.get(column) else None
