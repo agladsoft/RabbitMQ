@@ -1015,13 +1015,21 @@ class FreightRates(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['rate']
+        numeric_columns: list = ['rate', 'oversized_width', 'oversized_height', 'oversized_length']
+        date_columns: list = ['expiration_date', 'start_date']
+        bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate']
+
         old_key = "сlient"
         if old_key in data:
             data["client"] = data.pop(old_key)
 
         for column in numeric_columns:
             data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
 
 
 class ManagerEvaluation(DataCoreClient):
