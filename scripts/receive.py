@@ -141,11 +141,13 @@ class Receive(RabbitMq):
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
         try:
-            for d in data:
-                data_core.add_new_columns(d, file_name, original_date_string)
-                data_core.change_columns(d)
+            for i, row in enumerate(data):
+                data[i] = data_core.convert_to_lowercase(row)
+                data_core.add_new_columns(data[i], file_name, original_date_string)
+                data_core.change_columns(data[i])
                 if original_date_string:
-                    d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
+                    data[i][original_date_string] = data[i][original_date_string].strip() \
+                        if data[i][original_date_string] else None
         except Exception as ex:
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
@@ -267,6 +269,15 @@ class DataCoreClient(Receive):
         data['is_obsolete_date'] = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
+
+    @staticmethod
+    def convert_to_lowercase(data: dict):
+        """
+        Convert keys of columns to lowercase text.
+        :param data:
+        :return:
+        """
+        return {k.lower(): v for k, v in data.items()}
 
     def check_difference_columns(
             self,
@@ -1007,7 +1018,7 @@ class FreightRates(DataCoreClient):
         numeric_columns: list = ['rate']
 
         for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+            data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))) if data.get(column) else None
 
 
 class ManagerEvaluation(DataCoreClient):
