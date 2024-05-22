@@ -24,5 +24,5 @@ class Send(RabbitMq):
 
 if __name__ == '__main__':
     send = Send()
-    for filename in glob.iglob('/home/timur/sambashare/RabbitMQ/msg/*.json'):
+    for filename in glob.iglob('/home/ruscon/sambashare/RabbitMQ/errors/*.json'):
         send.main(filename)
