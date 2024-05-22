@@ -25,6 +25,5 @@ class Send(RabbitMq):
 
 if __name__ == '__main__':
     send = Send()
-    os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/ruscon/sambashare/RabbitMQ'
-    for filename in glob.iglob(f'{os.environ["XL_IDP_PATH_RABBITMQ"]}/msg/*.json'):
+    for filename in glob.iglob(f'/home/ruscon/sambashare/RabbitMQ/errors/*.json'):
         send.main(filename)
