@@ -72,7 +72,7 @@ def get_file_handler(name: str) -> logging.FileHandler:
     if not os.path.exists(log_dir_name):
         os.mkdir(log_dir_name)
     file_handler = RotatingFileHandler(filename=f"{log_dir_name}/{name}.log", mode='a', maxBytes=20.5 * pow(1024, 2),
-                                       backupCount=20)
+                                       backupCount=100)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
 
