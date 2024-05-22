@@ -541,12 +541,12 @@ class AutoPickupGeneralReport(DataCoreClient):
             'date_delivery_fact', 'date_receiving_empty_fact', 'date_delivery_plan',
             'date_loading_plan', 'date_receiving_empty_plan'
         ]
-        numeric_columns: list = [
+        numeric_columns: list = ['container_size']
+        float_columns: list = [
             'overpayment', 'downtime_amount', 'agreed_rate',
-            'container_size', 'overload_amount',
-            'add_expense_amount'
+            'total_rate', 'carrier_rate', 'economy',
+            'overload_amount', 'add_expense_amount'
         ]
-        float_columns: list = ['total_rate', 'carrier_rate', 'economy']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
