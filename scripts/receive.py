@@ -1096,7 +1096,7 @@ class ReferenceCounterparties(DataCoreClient):
         :param data:
         :return:
         """
-        bool_columns: list = ['is_control', 'is_foreign_company', 'deletion_flag']
+        bool_columns: list = ['is_control', 'is_foreign_company']
 
         for column in bool_columns:
             if isinstance(data.get(column), str):
