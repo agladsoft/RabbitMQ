@@ -1023,10 +1023,6 @@ class FreightRates(DataCoreClient):
         date_columns: list = ['expiration_date', 'start_date']
         bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate']
 
-        old_key = "сlient"
-        if old_key in data:
-            data["client"] = data.pop(old_key)
-
         for column in float_columns:
             data[column] = float(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")) \
                 if data.get(column) else None
@@ -1097,6 +1093,8 @@ class ReferenceCounterparties(DataCoreClient):
         :return:
         """
         bool_columns: list = ['is_control', 'is_foreign_company']
+
+        del data['deletion_flag']
 
         for column in bool_columns:
             if isinstance(data.get(column), str):
