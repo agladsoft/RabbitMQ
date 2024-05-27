@@ -1094,8 +1094,6 @@ class ReferenceCounterparties(DataCoreClient):
         """
         bool_columns: list = ['is_control', 'is_foreign_company']
 
-        del data['deletion_flag']
-
         for column in bool_columns:
             if isinstance(data.get(column), str):
                 data[column] = True if data.get(column).upper() == 'ДА' else False
