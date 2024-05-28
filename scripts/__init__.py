@@ -50,10 +50,16 @@ TABLE_NAMES: dict = {
         "natural_indicators_of_railway_reception_and_dispatch",
     "СуммыСчетовПокупателям":
         "accounts",
+    # "СтавкиФрахта":
+    #     "freight_rates",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
-        "manager_evaluation"
+        "manager_evaluation",
+
+    # Данные по справочнику контрагентов
+    "СправочникКонтрагентовДО":
+        "reference_counterparties",
 }
 
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'

@@ -95,11 +95,15 @@ class Receive(RabbitMq):
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
-            if delivery_tag:
-                self.channel.basic_ack(delivery_tag=delivery_tag)
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
+                self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
                 data_core.handle_rows(all_data, data, file_name, key_deals)
+            else:
+                data_core_client = DataCoreClient
+                data_core_client.database = None
+                data_core_client.table = all_data.get("header", {}).get("report")
+                data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
@@ -137,11 +141,13 @@ class Receive(RabbitMq):
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
         try:
-            for d in data:
-                data_core.add_new_columns(d, file_name, original_date_string)
-                data_core.change_columns(d)
+            for i, row in enumerate(data):
+                data[i] = data_core.convert_to_lowercase(row)
+                data_core.add_new_columns(data[i], file_name, original_date_string)
+                data_core.change_columns(data[i])
                 if original_date_string:
-                    d[original_date_string] = d[original_date_string].strip() if d[original_date_string] else None
+                    data[i][original_date_string] = data[i][original_date_string].strip() \
+                        if data[i][original_date_string] else None
         except Exception as ex:
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
@@ -203,6 +209,10 @@ class DataCoreClient(Receive):
     def database(self):
         return self.client.database
 
+    @database.setter
+    def database(self, database):
+        self.database: str = database
+
     @property
     def table(self):
         raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
@@ -260,6 +270,15 @@ class DataCoreClient(Receive):
         if original_date_string:
             data[original_date_string] = ''
 
+    @staticmethod
+    def convert_to_lowercase(data: dict):
+        """
+        Convert keys of columns to lowercase text.
+        :param data:
+        :return:
+        """
+        return {k.lower(): v for k, v in data.items()}
+
     def check_difference_columns(
             self,
             all_data: dict,
@@ -279,7 +298,7 @@ class DataCoreClient(Receive):
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
         diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
-        if (diff_db or diff_rabbit) and (diff_db != ['client_uid'] and diff_rabbit != ['clientUID']):
+        if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
@@ -981,6 +1000,41 @@ class Accounts(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class FreightRates(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        float_columns: list = ['rate']
+        numeric_columns: list = ['oversized_width', 'oversized_height', 'oversized_length']
+        date_columns: list = ['expiration_date', 'start_date']
+        bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate']
+
+        for column in float_columns:
+            data[column] = float(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")) \
+                if data.get(column) else None
+        for column in numeric_columns:
+            data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
+
+
 class ManagerEvaluation(DataCoreClient):
     def __init__(self):
         super().__init__()
@@ -1016,6 +1070,35 @@ class ManagerEvaluation(DataCoreClient):
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
 
 
+class ReferenceCounterparties(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def database(self):
+        return "DO"
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        bool_columns: list = ['is_control', 'is_foreign_company']
+
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
+
+
 if __name__ == '__main__':
     CLASSES: list = [
         # Данные по DC
@@ -1039,9 +1122,13 @@ if __name__ == '__main__':
         OrdersMarginalityReport,
         NaturalIndicatorsRailwayReceptionDispatch,
         Accounts,
+        FreightRates,
 
         # Данные по оценкам менеджеров
-        ManagerEvaluation
+        ManagerEvaluation,
+
+        # Данные по справочнику контрагентов
+        ReferenceCounterparties
     ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name
