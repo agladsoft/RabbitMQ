@@ -204,6 +204,7 @@ class DataCoreClient(Receive):
         super().__init__()
         self.client: Client = self.connect_to_db()
         self.removed_columns_db = ['uuid']
+        self.database = self.client.database
 
     @property
     def database(self):
