@@ -101,7 +101,6 @@ class Receive(RabbitMq):
                 data_core.handle_rows(all_data, data, file_name, key_deals)
             else:
                 data_core_client = DataCoreClient
-                data_core_client.database = None
                 data_core_client.table = all_data.get("header", {}).get("report")
                 data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
@@ -208,10 +207,6 @@ class DataCoreClient(Receive):
     @property
     def database(self):
         return self.client.database
-
-    @database.setter
-    def database(self, database):
-        self.database: str = database
 
     @property
     def table(self):
@@ -348,7 +343,7 @@ class DataCoreClient(Receive):
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
         columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.client.insert(table="rmq_log", data=rows, column_names=columns)
+        self.client.insert(table="rmq_log", database="DataCore", data=rows, column_names=columns)
 
     def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
         """
