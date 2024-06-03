@@ -1,7 +1,6 @@
 import re
 import sys
 import time
-
 import pytz
 import json
 import copy
