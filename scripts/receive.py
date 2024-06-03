@@ -1,5 +1,7 @@
 import re
 import sys
+import time
+
 import pytz
 import json
 import copy
@@ -136,6 +138,8 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
+        if 0 < len(data) < 5:
+            time.sleep(0.5)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
