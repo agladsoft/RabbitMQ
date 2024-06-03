@@ -1007,6 +1007,10 @@ class FreightRates(DataCoreClient):
     def deal(self):
         return "key_id"
 
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
     def change_columns(self, data: dict) -> None:
         """
         Changes columns in data.
