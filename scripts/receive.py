@@ -96,9 +96,9 @@ class Receive(RabbitMq):
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
+            self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
-                self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
                 data_core.handle_rows(all_data, data, file_name, key_deals)
             else:
                 data_core_client = DataCoreClient
