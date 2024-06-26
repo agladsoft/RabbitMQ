@@ -74,8 +74,9 @@ class Receive(RabbitMq):
             self.logger.info(message)
             url = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
             params = {
-                "chat_id": get_my_env_var('CHAT_ID'),
-                "text": message
+                "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
+                "text": message,
+                "reply_to_message_id": get_my_env_var('MESSAGE_ID')
             }
             message_errors = []
             upload_tables = set()
