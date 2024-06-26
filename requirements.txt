@@ -10,3 +10,4 @@ clickhouse-connect==0.6.9
 python-dotenv==1.0.0
 tinydb==4.8.0
 pandas==1.4.3
+requests==2.32.3
