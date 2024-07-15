@@ -1,9 +1,9 @@
 import re
 import sys
-import time
 import pytz
 import json
 import copy
+import requests
 import contextlib
 from __init__ import *
 from pathlib import Path
@@ -26,6 +26,8 @@ date_formats: tuple = (
     "%Y-%m-%d"
 )
 tz: pytz.timezone = pytz.timezone("Europe/Moscow")
+message_errors: list = []
+upload_tables: set = set()
 
 
 def serialize_datetime(obj):
@@ -53,10 +55,36 @@ class Receive(RabbitMq):
         self.channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
         self.channel.queue_declare(queue=self.queue_name, durable=self.durable)
         self.channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
+        self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=False)
         self.logger.info("Start consuming")
         self.channel.start_consuming()
         self.logger.info('The script has completed working')
+
+    def check_queue_empty(self):
+        """
+        Checking the number of messages in the queue
+        :return:
+        """
+        global message_errors, upload_tables
+        method_frame, header_frame, body = self.channel.basic_get(self.queue_name)
+        if method_frame is None:
+            message = f"Очередь '{self.queue_name}' пустая. Загруженные таблицы - {upload_tables}. " \
+                      f"Количество ошибок - {len(message_errors)}. Ошибки - {message_errors}"
+            self.logger.info(message)
+            url = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+            params = {
+                "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
+                "text": message,
+                "reply_to_message_id": get_my_env_var('MESSAGE_ID')
+            }
+            message_errors = []
+            upload_tables = set()
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return response
+        else:
+            self.channel.basic_nack(method_frame.delivery_tag)
 
     def read_text_msg(self, do_read_file: bool = False) -> None:
         """
@@ -95,18 +123,21 @@ class Receive(RabbitMq):
                                                         + str(datetime.now(tz=tz).date()))
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
-            delivery_tag = method.delivery_tag if not isinstance(method, str) else None
-            self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
                 data_core.handle_rows(all_data, data, file_name, key_deals)
             else:
+                message_errors.append(key_deals)
                 data_core_client = DataCoreClient
                 data_core_client.table = all_data.get("header", {}).get("report")
                 data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
+        finally:
+            self.check_queue_empty()
+            delivery_tag = method.delivery_tag if not isinstance(method, str) else None
+            self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
 
     @staticmethod
     def save_text_msg(msg: Union[bytes, bytearray]) -> None:
@@ -137,8 +168,6 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
-        if 0 < len(data) < 5:
-            time.sleep(0.5)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
@@ -153,6 +182,7 @@ class Receive(RabbitMq):
         except Exception as ex:
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
+            data_core.message_errors.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types")
@@ -173,6 +203,7 @@ class Receive(RabbitMq):
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
+        upload_tables.add(eng_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
@@ -181,6 +212,7 @@ class Receive(RabbitMq):
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
+        upload_tables.add(rus_table_name)
         return all_data, data, None, data_core, key_deals
 
     def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
@@ -299,6 +331,7 @@ class DataCoreClient(Receive):
         if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
+            message_errors.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because columns is different")
@@ -367,6 +400,7 @@ class DataCoreClient(Receive):
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}")
+            message_errors.append(key_deals)
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
