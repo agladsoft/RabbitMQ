@@ -134,6 +134,11 @@ class Receive(RabbitMq):
             self.logger.info("Callback exit. The data from the queue was processed by the script")
         except AssertionError:
             pass
+        except ConnectionError as ex:
+            self.logger.error(f"ConnectionError is {ex}")
+            msg: str = body.decode('utf-8-sig') if isinstance(body, (bytes, bytearray)) else body
+            all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
+            self.write_to_json(all_data, "unknown", dir_name="errors")
         finally:
             self.check_queue_empty()
             delivery_tag = method.delivery_tag if not isinstance(method, str) else None
@@ -348,7 +353,7 @@ class DataCoreClient(Receive):
             self.logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            sys.exit(1)
+            raise ConnectionError
         return client
 
     def get_table_columns(self):
