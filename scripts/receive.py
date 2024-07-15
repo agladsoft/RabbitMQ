@@ -1,5 +1,4 @@
 import re
-import sys
 import pytz
 import json
 import copy
@@ -43,7 +42,7 @@ class Receive(RabbitMq):
                                                     + str(datetime.now(tz=tz).date()))
         self.count_message: int = 0
 
-    def read_msg(self) -> None:
+    def main(self) -> None:
         """
         Connecting to a queue and receiving messages
         :return:
@@ -136,8 +135,8 @@ class Receive(RabbitMq):
             pass
         except ConnectionError as ex:
             self.logger.error(f"ConnectionError is {ex}")
-            msg: str = body.decode('utf-8-sig') if isinstance(body, (bytes, bytearray)) else body
-            all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
+            all_data, rus_table_name, key_deals = self.read_msg(body)
+            message_errors.append(key_deals)
             self.write_to_json(all_data, "unknown", dir_name="errors")
         finally:
             self.check_queue_empty()
@@ -197,16 +196,21 @@ class Receive(RabbitMq):
                                                key_deals)
         return file_name
 
+    @staticmethod
+    def read_msg(msg: str) -> Tuple[dict, str, str]:
+        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
+        all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
+        rus_table_name: str = all_data.get("header", {}).get("report")
+        key_deals: str = all_data.get("header", {}).get("key_id")
+        return all_data, rus_table_name, key_deals
+
     def read_json(self, msg: str) -> Tuple[dict, list, Optional[str], Any, str]:
         """
         Decoding a message and working with data.
         :param msg:
         :return:
         """
-        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
-        all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
-        rus_table_name: str = all_data.get("header", {}).get("report")
-        key_deals: str = all_data.get("header", {}).get("key_id")
+        all_data, rus_table_name, key_deals = self.read_msg(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         upload_tables.add(eng_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
@@ -1175,4 +1179,4 @@ if __name__ == '__main__':
         table_name: class_name
         for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
     }
-    Receive().read_msg()
+    Receive().main()
