@@ -11,9 +11,9 @@ from pika.spec import Basic
 from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
+from clickhouse_connect.driver import Client
 from datetime import datetime, date, timedelta
 from typing import Tuple, Union, Optional, Any
-from clickhouse_connect.driver import Client, exceptions
 from pika.adapters.blocking_connection import BlockingChannel
 
 date_formats: tuple = (
@@ -176,8 +176,8 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
-        if 0 < len(data) < 15:
-            time.sleep(0.1)
+        if 0 < len(data) < 50:
+            time.sleep(1)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
@@ -409,12 +409,7 @@ class DataCoreClient(Receive):
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
-                try:
-                    self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
-                except exceptions.Error:
-                    self.logger.error("Exception is merges are processing significantly slower than inserts")
-                    time.sleep(20)
-                    self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
+                self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
