@@ -72,12 +72,15 @@ class Receive(RabbitMq):
             message = f"Очередь '{self.queue_name}' пустая. Загруженные таблицы - {upload_tables}. " \
                       f"Количество ошибок - {len(message_errors)}. Ошибки - {message_errors}"
             self.logger.info(message)
-            url = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+            max_len_message: int = 4095
+            if len(message) >= max_len_message:
+                message = message[:max_len_message]
             params = {
                 "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
                 "text": message,
                 "reply_to_message_id": get_my_env_var('MESSAGE_ID')
             }
+            url = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
             message_errors = []
             upload_tables = set()
             response = requests.get(url, params=params)
