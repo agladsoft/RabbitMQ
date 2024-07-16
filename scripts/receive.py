@@ -11,9 +11,9 @@ from pika.spec import Basic
 from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
-from clickhouse_connect.driver import Client
 from datetime import datetime, date, timedelta
 from typing import Tuple, Union, Optional, Any
+from clickhouse_connect.driver import Client, exceptions
 from pika.adapters.blocking_connection import BlockingChannel
 
 date_formats: tuple = (
@@ -409,7 +409,11 @@ class DataCoreClient(Receive):
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
-                self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
+                try:
+                    self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
+                except exceptions.DatabaseError:
+                    time.sleep(20)
+                    self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
             self.update_status(data, file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
