@@ -72,7 +72,7 @@ class Receive(RabbitMq):
             message = f"Очередь '{self.queue_name}' пустая. Загруженные таблицы - {upload_tables}. " \
                       f"Количество ошибок - {len(message_errors)}. Ошибки - {message_errors}"
             self.logger.info(message)
-            max_len_message: int = 4095
+            max_len_message: int = 4090
             if len(message) >= max_len_message:
                 message = message[:max_len_message]
             params = {
