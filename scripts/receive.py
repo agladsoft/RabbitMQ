@@ -411,8 +411,8 @@ class DataCoreClient(Receive):
             if rows and columns:
                 try:
                     self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
-                except Exception as ex1:
-                    self.logger.error(f"Exception is {ex1}. Merges are processing significantly slower than inserts")
+                except exceptions.Error:
+                    self.logger.error("Exception is merges are processing significantly slower than inserts")
                     time.sleep(20)
                     self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
