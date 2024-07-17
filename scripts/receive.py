@@ -176,8 +176,8 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
-        if 0 < len(data) < 15:
-            time.sleep(1)
+        if 0 < len(data) < 20:
+            time.sleep(0.3)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
@@ -414,7 +414,7 @@ class DataCoreClient(Receive):
             self.update_status(data, file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
-            self.logger.error(f"Exception is {ex}")
+            self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             message_errors.append(key_deals)
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
