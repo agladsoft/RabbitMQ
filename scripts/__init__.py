@@ -14,8 +14,8 @@ TABLE_NAMES: dict = {
         "counterparties",
     "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту":
         "datacore_freight",
-    "ОтчетНатуральныеПоказателиПоСделкамИСегментам":
-        "natural_indicators_by_contracts_segments",
+    # "ОтчетНатуральныеПоказателиПоСделкамИСегментам":
+    #     "natural_indicators_by_contracts_segments",
     "ОтчетПоПоручениям":
         "orders_report",
     "ОбщийОтчетПоАвтовывозу":
