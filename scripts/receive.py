@@ -475,7 +475,7 @@ class DataCoreClient(Receive):
         :return:
         """
         self.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
-        self.logger.info("Successfully deleted old transaction data")
+        self.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
 
     def __exit__(self, exception_type, exception_val, trace):
         try:
