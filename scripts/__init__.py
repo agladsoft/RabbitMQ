@@ -62,6 +62,9 @@ TABLE_NAMES: dict = {
         "reference_counterparties",
 }
 
+LOG_TABLE: str = "rmq_log"
+
+# os.environ['TOKEN_TELEGRAM'] = '6557326533:AAGcYU6q0DFLJfjZMHTaDjLnf-PzRMzA-6M'
 # os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
 # os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
 
@@ -73,11 +76,14 @@ def get_my_env_var(var_name: str) -> str:
         raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
 
 
+LOG_DIR_NAME: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
+LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.log"
+
+
 def get_file_handler(name: str) -> logging.FileHandler:
-    log_dir_name: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
-    if not os.path.exists(log_dir_name):
-        os.mkdir(log_dir_name)
-    file_handler = RotatingFileHandler(filename=f"{log_dir_name}/{name}.log", mode='a', maxBytes=20.5 * pow(1024, 2),
+    if not os.path.exists(LOG_DIR_NAME):
+        os.mkdir(LOG_DIR_NAME)
+    file_handler = RotatingFileHandler(filename=f"{LOG_DIR_NAME}/{name}.log", mode='a', maxBytes=20.5 * pow(1024, 2),
                                        backupCount=100)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
