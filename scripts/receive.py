@@ -29,7 +29,7 @@ TZ: pytz.timezone = pytz.timezone("Europe/Moscow")
 MESSAGE_ERRORS: list = []
 UPLOAD_TABLES_DAY: set = set()
 UPLOAD_TABLES: set = set()
-REQUIRED_TIME = datetime(year=2024, month=7, day=24, hour=15, minute=40).time()
+REQUIRED_TIME = datetime(year=2024, month=7, day=24, hour=19, minute=55).time()
 
 
 def serialize_datetime(obj):
