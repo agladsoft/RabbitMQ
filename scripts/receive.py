@@ -1181,37 +1181,38 @@ class ReferenceCounterparties(DataCoreClient):
                 data[column] = True if data.get(column).upper() == 'ДА' else False
 
 
+CLASSES: list = [
+    # Данные по DC
+    CounterParties,
+    DataCoreFreight,
+    NaturalIndicatorsContractsSegments,
+    OrdersReport,
+    AutoPickupGeneralReport,
+    TransportUnits,
+    Consignments,
+    SalesPlan,
+    NaturalIndicatorsTransactionFactDate,
+    DevelopmentCounterpartyDepartment,
+    ExportBookings,
+    ImportBookings,
+    CompletedRepackagesReport,
+    AutoVisits,
+    AccountingDocumentsRequests,
+    DailySummary,
+    RZHDOperationsReport,
+    OrdersMarginalityReport,
+    NaturalIndicatorsRailwayReceptionDispatch,
+    Accounts,
+    FreightRates,
+
+    # Данные по оценкам менеджеров
+    ManagerEvaluation,
+
+    # Данные по справочнику контрагентов
+    ReferenceCounterparties
+]
+
 if __name__ == '__main__':
-    CLASSES: list = [
-        # Данные по DC
-        CounterParties,
-        DataCoreFreight,
-        NaturalIndicatorsContractsSegments,
-        OrdersReport,
-        AutoPickupGeneralReport,
-        TransportUnits,
-        Consignments,
-        SalesPlan,
-        NaturalIndicatorsTransactionFactDate,
-        DevelopmentCounterpartyDepartment,
-        ExportBookings,
-        ImportBookings,
-        CompletedRepackagesReport,
-        AutoVisits,
-        AccountingDocumentsRequests,
-        DailySummary,
-        RZHDOperationsReport,
-        OrdersMarginalityReport,
-        NaturalIndicatorsRailwayReceptionDispatch,
-        Accounts,
-        FreightRates,
-
-        # Данные по оценкам менеджеров
-        ManagerEvaluation,
-
-        # Данные по справочнику контрагентов
-        ReferenceCounterparties
-    ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name
         for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
