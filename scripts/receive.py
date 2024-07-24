@@ -70,7 +70,7 @@ class Receive(RabbitMq):
         """
         current_time = datetime.now()
         with open(LOG_FILE, 'w') as file:
-            file.write(f"Количество сообщений на {current_time}: {self.count_message}\n"
+            file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}.\n"
                        f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}")
 
     def check_and_update_log(self):
@@ -81,9 +81,10 @@ class Receive(RabbitMq):
         global UPLOAD_TABLES_DAY
         if os.path.exists(LOG_FILE):
             file_mod_time = datetime.fromtimestamp(os.path.getmtime(LOG_FILE))
-            if file_mod_time.time() < REQUIRED_TIME:
+            if file_mod_time.time() > REQUIRED_TIME:
                 self.create_log_file()
                 UPLOAD_TABLES_DAY = set()
+                self.count_message = 0
         else:
             self.create_log_file()
 
