@@ -1,10 +1,10 @@
 import re
-import time
 import pytz
 import json
 import copy
 import requests
 import contextlib
+from time import sleep
 from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
@@ -12,8 +12,8 @@ from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from datetime import datetime, date, timedelta
 from typing import Tuple, Union, Optional, Any
+from datetime import datetime, date, time, timedelta
 from pika.adapters.blocking_connection import BlockingChannel
 
 DATE_FORMATS: tuple = (
@@ -29,7 +29,7 @@ TZ: pytz.timezone = pytz.timezone("Europe/Moscow")
 MESSAGE_ERRORS: list = []
 UPLOAD_TABLES_DAY: set = set()
 UPLOAD_TABLES: set = set()
-REQUIRED_TIME = datetime(year=2024, month=7, day=24, hour=19, minute=55).time()
+REQUIRED_TIME: time = time(hour=19, minute=58)
 
 
 def serialize_datetime(obj):
@@ -44,6 +44,7 @@ class Receive(RabbitMq):
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                     + str(datetime.now(tz=TZ).date()))
         self.count_message: int = 0
+        self.is_greater_time: bool = False
 
     def main(self) -> None:
         """
@@ -68,9 +69,9 @@ class Receive(RabbitMq):
 
         :return:
         """
-        current_time = datetime.now()
+        current_time = datetime.today()
         with open(LOG_FILE, 'w') as file:
-            file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}.\n"
+            file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
                        f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}")
 
     def check_and_update_log(self):
@@ -79,14 +80,15 @@ class Receive(RabbitMq):
         :return:
         """
         global UPLOAD_TABLES_DAY
-        if os.path.exists(LOG_FILE):
-            file_mod_time = datetime.fromtimestamp(os.path.getmtime(LOG_FILE))
-            if file_mod_time.time() > REQUIRED_TIME:
-                self.create_log_file()
-                UPLOAD_TABLES_DAY = set()
-                self.count_message = 0
-        else:
+        current_time = datetime.now().time().replace(second=0, microsecond=0)
+        if current_time > REQUIRED_TIME and self.is_greater_time:
             self.create_log_file()
+            UPLOAD_TABLES_DAY = set()
+            self.count_message = 0
+            self.is_greater_time = False
+            sleep(120)
+        elif current_time < REQUIRED_TIME and not self.is_greater_time:
+            self.is_greater_time = True
 
     def check_queue_empty(self):
         """
@@ -150,12 +152,12 @@ class Receive(RabbitMq):
         :return:
         """
         try:
+            self.check_and_update_log()
             self.count_message += 1
             self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
                                                         + str(datetime.now(tz=TZ).date()))
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
-            self.check_and_update_log()
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
                 data_core.handle_rows(all_data, data, file_name, key_deals)
@@ -207,7 +209,7 @@ class Receive(RabbitMq):
         file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         if 0 < len(data) < 20:
-            time.sleep(0.3)
+            sleep(0.3)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
