@@ -1,10 +1,4 @@
-FROM ubuntu:20.04
-
-ENV DEBIAN_FRONTEND noninteractive
-
-RUN apt-get update && apt-get -y upgrade && \
-    apt-get -y install python3.8 && \
-    apt update && apt install python3-pip -y
+FROM python:3.8
 
 ARG XL_IDP_PATH_DOCKER
 
