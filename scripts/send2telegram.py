@@ -16,9 +16,9 @@ def send_message():
         "reply_to_message_id": get_my_env_var('MESSAGE_ID')
     }
     url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
-    # response = requests.get(url, params=params)
-    # response.raise_for_status()
-    # return response
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response
 
 
 if __name__ == "__main__":
