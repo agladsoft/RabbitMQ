@@ -89,6 +89,7 @@ class Receive(RabbitMq):
             self.is_greater_time = False
             time_.sleep(120)
         elif current_time < REQUIRED_TIME and not self.is_greater_time:
+            self.logger.info("current_time lesser REQUIRED_TIME and self.is_greater_time = True")
             self.is_greater_time = True
 
     def check_queue_empty(self):
