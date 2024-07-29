@@ -6,6 +6,8 @@ RUN apt-get update && apt-get -y upgrade && \
     apt-get -y install python3.8 && \
     apt update && apt install python3-pip -y
 
+ENV XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
+
 # Install Cron
 RUN apt-get update && apt-get -y install cron
 
