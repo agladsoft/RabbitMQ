@@ -11,7 +11,7 @@ ENV XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
 # Install Cron
 RUN apt-get update && apt-get -y install cron
 
-RUN chmod -R 777 $XL_IDP_PATH_DOCKER
+RUN chmod -R 777 ${XL_IDP_PATH_DOCKER}
 
 COPY requirements.txt ./
 
