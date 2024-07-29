@@ -6,6 +6,8 @@ def send_message():
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, 'r') as file:
             message = file.read()
+    else:
+        message = "Не было сообщений"
     params: dict = {
         "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
         "text": message,
