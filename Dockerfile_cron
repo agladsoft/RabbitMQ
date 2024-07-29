@@ -1,8 +1,12 @@
-FROM python:3.8
+FROM ubuntu:20.04
 
 ARG XL_IDP_PATH_DOCKER
 
-ENV XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
+ENV DEBIAN_FRONTEND noninteractive && XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
+
+RUN apt-get update && apt-get -y upgrade && \
+    apt-get -y install python3.8 && \
+    apt update && apt install python3-pip -y
 
 # Install Cron
 RUN apt-get update && apt-get -y install cron
