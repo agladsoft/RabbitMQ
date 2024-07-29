@@ -11,13 +11,13 @@ ENV XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
 # Install Cron
 RUN apt-get update && apt-get -y install cron
 
-RUN chmod -R 777 ${XL_IDP_PATH_DOCKER}
+RUN chmod -R 777 /mnt
 
 COPY requirements.txt ./
 
 RUN pip install -r requirements.txt
 
-WORKDIR ${XL_IDP_PATH_DOCKER}
+WORKDIR /mnt
 
 COPY crontab /etc/cron.d/crontab
 RUN chmod 0644 /etc/cron.d/crontab
