@@ -1,10 +1,10 @@
 import re
-import time
 import pytz
 import json
 import copy
 import requests
 import contextlib
+from time import sleep
 from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
@@ -12,11 +12,11 @@ from rabbit_mq import RabbitMq
 from pika import BasicProperties
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from datetime import datetime, date, timedelta
 from typing import Tuple, Union, Optional, Any
+from datetime import datetime, date, time, timedelta
 from pika.adapters.blocking_connection import BlockingChannel
 
-date_formats: tuple = (
+DATE_FORMATS: tuple = (
     "%Y-%m-%dT%H:%M:%SZ",
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%dT%H:%M:%S%z",
@@ -25,9 +25,11 @@ date_formats: tuple = (
     "%d.%m.%Y",
     "%Y-%m-%d"
 )
-tz: pytz.timezone = pytz.timezone("Europe/Moscow")
-message_errors: list = []
-upload_tables: set = set()
+TZ: pytz.timezone = pytz.timezone("Europe/Moscow")
+MESSAGE_ERRORS: list = []
+UPLOAD_TABLES_DAY: set = set()
+UPLOAD_TABLES: set = set()
+REQUIRED_TIME: time = time(hour=19, minute=58)
 
 
 def serialize_datetime(obj):
@@ -40,8 +42,9 @@ class Receive(RabbitMq):
     def __init__(self):
         super().__init__()
         self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                    + str(datetime.now(tz=tz).date()))
+                                                    + str(datetime.now(tz=TZ).date()))
         self.count_message: int = 0
+        self.is_greater_time: bool = False
 
     def main(self) -> None:
         """
@@ -61,31 +64,59 @@ class Receive(RabbitMq):
         self.channel.start_consuming()
         self.logger.info('The script has completed working')
 
+    def create_log_file(self):
+        """
+
+        :return:
+        """
+        current_time = datetime.today()
+        with open(LOG_FILE, 'w') as file:
+            file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
+                       f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}")
+
+    def check_and_update_log(self):
+        """
+
+        :return:
+        """
+        global UPLOAD_TABLES_DAY
+        current_time = datetime.now().time().replace(second=0, microsecond=0)
+        if current_time > REQUIRED_TIME and self.is_greater_time:
+            self.create_log_file()
+            UPLOAD_TABLES_DAY = set()
+            self.count_message = 0
+            self.is_greater_time = False
+            sleep(120)
+        elif current_time < REQUIRED_TIME and not self.is_greater_time:
+            self.is_greater_time = True
+
     def check_queue_empty(self):
         """
         Checking the number of messages in the queue
         :return:
         """
-        global message_errors, upload_tables
+        global MESSAGE_ERRORS, UPLOAD_TABLES
         method_frame, header_frame, body = self.channel.basic_get(self.queue_name)
         if method_frame is None:
-            message = f"Очередь '{self.queue_name}' пустая. Загруженные таблицы - {upload_tables}. " \
-                      f"Количество ошибок - {len(message_errors)}. Ошибки - {message_errors}"
+            message: str = f"Очередь '{self.queue_name}' пустая.\nЗагруженные таблицы - {UPLOAD_TABLES}.\n" \
+                           f"Количество ошибок - {len(MESSAGE_ERRORS)}.\nОшибки - {MESSAGE_ERRORS}"
             self.logger.info(message)
             max_len_message: int = 4090
             if len(message) >= max_len_message:
                 message = message[:max_len_message]
-            params = {
+            self.create_log_file()
+            params: dict = {
                 "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
                 "text": message,
                 "reply_to_message_id": get_my_env_var('MESSAGE_ID')
             }
-            url = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
-            message_errors = []
-            upload_tables = set()
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            return response
+            url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+            UPLOAD_TABLES = set()
+            if MESSAGE_ERRORS:
+                MESSAGE_ERRORS = []
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                return response
         else:
             self.channel.basic_nack(method_frame.delivery_tag)
 
@@ -121,16 +152,17 @@ class Receive(RabbitMq):
         :return:
         """
         try:
+            self.check_and_update_log()
             self.count_message += 1
             self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                        + str(datetime.now(tz=tz).date()))
+                                                        + str(datetime.now(tz=TZ).date()))
             self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
                              f"body_message called. Count messages is {self.count_message}")
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
                 data_core.handle_rows(all_data, data, file_name, key_deals)
             else:
-                message_errors.append(key_deals)
+                MESSAGE_ERRORS.append(key_deals)
                 data_core_client = DataCoreClient
                 data_core_client.table = all_data.get("header", {}).get("report")
                 data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
@@ -140,7 +172,7 @@ class Receive(RabbitMq):
         except ConnectionError as ex:
             self.logger.error(f"ConnectionError is {ex}")
             all_data, rus_table_name, key_deals = self.read_msg(body)
-            message_errors.append(key_deals)
+            MESSAGE_ERRORS.append(key_deals)
             self.write_to_json(all_data, "unknown", dir_name="errors")
         finally:
             self.check_queue_empty()
@@ -157,7 +189,7 @@ class Receive(RabbitMq):
         if isinstance(msg, (bytes, bytearray)):
             json_msg = json.loads(msg.decode('utf8'))
             file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/" \
-                             f"{datetime.now(tz=tz)}-{json_msg['header']['report']}-text_msg.json"
+                             f"{datetime.now(tz=TZ)}-{json_msg['header']['report']}-text_msg.json"
             fle: Path = Path(file_name)
             if not os.path.exists(os.path.dirname(fle)):
                 os.makedirs(os.path.dirname(fle))
@@ -174,10 +206,10 @@ class Receive(RabbitMq):
         :param key_deals:
         :return:
         """
-        file_name: str = f"{eng_table_name}_{datetime.now(tz=tz)}.json"
+        file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         if 0 < len(data) < 20:
-            time.sleep(0.3)
+            sleep(0.3)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
@@ -192,7 +224,7 @@ class Receive(RabbitMq):
         except Exception as ex:
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
-            data_core.message_errors.append(key_deals)
+            MESSAGE_ERRORS.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types")
@@ -218,7 +250,8 @@ class Receive(RabbitMq):
         """
         all_data, rus_table_name, key_deals = self.read_msg(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
-        upload_tables.add(eng_table_name)
+        UPLOAD_TABLES.add(eng_table_name)
+        UPLOAD_TABLES_DAY.add(eng_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
@@ -227,7 +260,8 @@ class Receive(RabbitMq):
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
-        upload_tables.add(rus_table_name)
+        UPLOAD_TABLES.add(rus_table_name)
+        UPLOAD_TABLES_DAY.add(rus_table_name)
         return all_data, data, None, data_core, key_deals
 
     def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
@@ -238,8 +272,8 @@ class Receive(RabbitMq):
         :param dir_name:
         :return:
         """
-        self.logger.info(f"Saving data to file {datetime.now(tz=tz)}_{eng_table_name}.json")
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=tz)}_{eng_table_name}" \
+        self.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}" \
                          f".json"
         fle: Path = Path(file_name)
         if not os.path.exists(os.path.dirname(fle)):
@@ -286,7 +320,7 @@ class DataCoreClient(Receive):
         """
         Convert to a date type.
         """
-        for date_format in date_formats:
+        for date_format in DATE_FORMATS:
             with contextlib.suppress(ValueError):
                 if not is_datetime:
                     date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
@@ -311,7 +345,7 @@ class DataCoreClient(Receive):
         """
         data['original_file_parsed_on'] = file_name
         data['is_obsolete'] = False
-        data['is_obsolete_date'] = datetime.now(tz=tz).strftime("%Y-%m-%d %H:%M:%S")
+        data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
 
@@ -346,7 +380,7 @@ class DataCoreClient(Receive):
         if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
-            message_errors.append(key_deals)
+            MESSAGE_ERRORS.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because columns is different")
@@ -389,12 +423,12 @@ class DataCoreClient(Receive):
             self.table,
             self.queue_name,
             key_deals,
-            datetime.now(tz=tz) + timedelta(hours=3),
+            datetime.now(tz=TZ) + timedelta(hours=3),
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
         columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.client.insert(table="rmq_log", database="DataCore", data=rows, column_names=columns)
+        self.client.insert(table=LOG_TABLE, database="DataCore", data=rows, column_names=columns)
 
     def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
         """
@@ -415,7 +449,7 @@ class DataCoreClient(Receive):
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            message_errors.append(key_deals)
+            MESSAGE_ERRORS.append(key_deals)
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
@@ -432,7 +466,7 @@ class DataCoreClient(Receive):
             self.client.query(query)
         if not data:
             query: str = f"ALTER TABLE {self.database}.{self.table} " \
-                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=tz)}' " \
+                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=TZ)}' " \
                          f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
                          f"AND {self.deal}='{key_deals}'"
             self.client.query(query)
@@ -444,7 +478,7 @@ class DataCoreClient(Receive):
         :return:
         """
         self.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
-        self.logger.info("Successfully deleted old transaction data")
+        self.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
 
     def __exit__(self, exception_type, exception_val, trace):
         try:
@@ -1150,37 +1184,38 @@ class ReferenceCounterparties(DataCoreClient):
                 data[column] = True if data.get(column).upper() == 'ДА' else False
 
 
+CLASSES: list = [
+    # Данные по DC
+    CounterParties,
+    DataCoreFreight,
+    NaturalIndicatorsContractsSegments,
+    OrdersReport,
+    AutoPickupGeneralReport,
+    TransportUnits,
+    Consignments,
+    SalesPlan,
+    NaturalIndicatorsTransactionFactDate,
+    DevelopmentCounterpartyDepartment,
+    ExportBookings,
+    ImportBookings,
+    CompletedRepackagesReport,
+    AutoVisits,
+    AccountingDocumentsRequests,
+    DailySummary,
+    RZHDOperationsReport,
+    OrdersMarginalityReport,
+    NaturalIndicatorsRailwayReceptionDispatch,
+    Accounts,
+    FreightRates,
+
+    # Данные по оценкам менеджеров
+    ManagerEvaluation,
+
+    # Данные по справочнику контрагентов
+    ReferenceCounterparties
+]
+
 if __name__ == '__main__':
-    CLASSES: list = [
-        # Данные по DC
-        CounterParties,
-        DataCoreFreight,
-        NaturalIndicatorsContractsSegments,
-        OrdersReport,
-        AutoPickupGeneralReport,
-        TransportUnits,
-        Consignments,
-        SalesPlan,
-        NaturalIndicatorsTransactionFactDate,
-        DevelopmentCounterpartyDepartment,
-        ExportBookings,
-        ImportBookings,
-        CompletedRepackagesReport,
-        AutoVisits,
-        AccountingDocumentsRequests,
-        DailySummary,
-        RZHDOperationsReport,
-        OrdersMarginalityReport,
-        NaturalIndicatorsRailwayReceptionDispatch,
-        Accounts,
-        FreightRates,
-
-        # Данные по оценкам менеджеров
-        ManagerEvaluation,
-
-        # Данные по справочнику контрагентов
-        ReferenceCounterparties
-    ]
     CLASS_NAMES_AND_TABLES: dict = {
         table_name: class_name
         for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
