@@ -81,14 +81,15 @@ class Receive(RabbitMq):
         """
         global UPLOAD_TABLES_DAY
         current_time = datetime.now().time().replace(second=0, microsecond=0)
-        if current_time > REQUIRED_TIME and self.is_greater_time:
+        if current_time >= REQUIRED_TIME and self.is_greater_time:
             self.logger.info("Created log file for writing count messages")
             self.create_log_file()
             UPLOAD_TABLES_DAY = set()
             self.count_message = 0
             self.is_greater_time = False
-            sleep(120)
-        elif current_time < REQUIRED_TIME and not self.is_greater_time:
+            time_.sleep(180)
+        elif current_time <= REQUIRED_TIME and not self.is_greater_time:
+            self.logger.info("current_time lesser REQUIRED_TIME and self.is_greater_time = True")
             self.is_greater_time = True
 
     def check_queue_empty(self):
