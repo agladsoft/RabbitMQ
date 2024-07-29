@@ -1,0 +1,21 @@
+import requests
+from __init__ import *
+
+
+def send_message():
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'r') as file:
+            message = file.read()
+    params: dict = {
+        "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
+        "text": message,
+        "reply_to_message_id": get_my_env_var('MESSAGE_ID')
+    }
+    url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response
+
+
+if __name__ == "__main__":
+    send_message()
