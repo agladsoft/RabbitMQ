@@ -3,7 +3,8 @@ from __init__ import *
 
 
 def send_message():
-    logging.info("Send message to telegram")
+    logger = get_logger(os.path.basename(__file__).replace(".py", ""))
+    logger.info("Send message to telegram")
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, 'r') as file:
             message = file.read()
