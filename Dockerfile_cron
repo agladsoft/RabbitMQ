@@ -1,8 +1,6 @@
 FROM ubuntu:20.04
 
-ARG XL_IDP_PATH_DOCKER
-
-ENV DEBIAN_FRONTEND noninteractive && XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
+ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && apt-get -y upgrade && \
     apt-get -y install python3.8 && \
