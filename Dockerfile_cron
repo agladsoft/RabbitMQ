@@ -11,7 +11,7 @@ RUN chmod -R 777 $XL_IDP_PATH_DOCKER
 
 COPY requirements.txt ./
 
-COPY scripts/*.py ./
+COPY scripts scripts/
 
 RUN pip install -r requirements.txt
 
