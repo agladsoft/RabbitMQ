@@ -87,7 +87,7 @@ class Receive(RabbitMq):
             UPLOAD_TABLES_DAY = set()
             self.count_message = 0
             self.is_greater_time = False
-            time_.sleep(180)
+            sleep(180)
         elif current_time <= REQUIRED_TIME and not self.is_greater_time:
             self.logger.info("current_time lesser REQUIRED_TIME and self.is_greater_time = True")
             self.is_greater_time = True
