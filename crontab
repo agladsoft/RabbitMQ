@@ -1,5 +1,5 @@
 # START CRON JOB
 SHELL=/bin/sh
 PATH=/usr/local/bin:/usr/bin:/bin
-30 12 * * * python3 ${XL_IDP_PATH_DOCKER}/scripts/send2telegram.py > /proc/1/fd/1 2>/proc/1/fd/2
+40 12 * * * python3 ${XL_IDP_PATH_DOCKER}/scripts/send2telegram.py > /proc/1/fd/1 2>/proc/1/fd/2
 # END CRON JOB
