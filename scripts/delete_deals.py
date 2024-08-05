@@ -30,4 +30,5 @@ class AllDeletedTables(DataCoreClient, ABC):
             self.delete_old_deals()
 
 
-AllDeletedTables().delete_table_deals()
+if __name__ == "__main__":
+    AllDeletedTables().delete_table_deals()
