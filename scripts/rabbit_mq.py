@@ -23,7 +23,9 @@ class RabbitMq:
             port=5672,
             virtual_host='/',
             credentials=credentials,
+            heartbeat=600,
             connection_attempts=5,
+            blocked_connection_timeout=300,
             retry_delay=3
         )
         connection = pika.BlockingConnection(parameters)
