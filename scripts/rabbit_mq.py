@@ -25,7 +25,7 @@ class RabbitMq:
             credentials=credentials,
             heartbeat=600,
             connection_attempts=5,
-            blocked_connection_timeout=300,
+            blocked_connection_timeout=10800,
             retry_delay=3
         )
         connection = pika.BlockingConnection(parameters)
