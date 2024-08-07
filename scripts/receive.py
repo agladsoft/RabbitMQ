@@ -442,7 +442,6 @@ class DataCoreClient(Receive):
         :return:
         """
         try:
-            self.write_to_json(all_data, self.table, dir_name="msg")
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
