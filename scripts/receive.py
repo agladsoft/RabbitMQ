@@ -447,7 +447,7 @@ class DataCoreClient(Receive):
             if rows and columns:
                 self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
                 self.logger.info("The data has been uploaded to the database")
-            self.update_status(data, file_name, key_deals)
+            self.update_status(file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
@@ -455,23 +455,16 @@ class DataCoreClient(Receive):
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
-    def update_status(self, data: list, file_name: str, key_deals: str) -> None:
+    def update_status(self, file_name: str, key_deals: str) -> None:
         """
         Updating the transaction by parameters.
         :return:
         """
-        for item in data:
-            query: str = f"ALTER TABLE {self.database}.{self.table} " \
-                         f"UPDATE is_obsolete=true, is_obsolete_date='{item['is_obsolete_date']}' " \
-                         f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
-                         f"AND {self.deal}='{item[self.deal]}'"
-            self.client.query(query)
-        if not data:
-            query: str = f"ALTER TABLE {self.database}.{self.table} " \
-                         f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=TZ)}' " \
-                         f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
-                         f"AND {self.deal}='{key_deals}'"
-            self.client.query(query)
+        query: str = f"ALTER TABLE {self.database}.{self.table} " \
+                     f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=TZ)}' " \
+                     f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
+                     f"AND {self.deal}='{key_deals}'"
+        self.client.command(query)
         self.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
