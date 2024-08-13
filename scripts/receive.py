@@ -445,7 +445,7 @@ class DataCoreClient(Receive):
         :return:
         """
         try:
-            self.update_status()
+            self.update_status(key_deals)
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
@@ -464,23 +464,24 @@ class DataCoreClient(Receive):
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
-    def update_status(self) -> None:
+    def update_status(self, key_deals: str) -> None:
         """
         Updating the transaction by parameters.
         :return:
         """
-        query = (f"SELECT * FROM {self.database}.{self.table} "
-                 f"LEFT JOIN "
-                 f"(SELECT uuid, {self.deal} FROM {self.database}.{self.table} GROUP BY uuid, {self.deal} "
-                 f"HAVING sum(sign) > 0) qr ON uuid = qr.uuid "
-                 f"WHERE qr.{self.deal} != ''")
+        query = (
+            f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
+            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} = '{key_deals}' "
+            f"GROUP BY uuid HAVING SUM(sign) > 0"
+            f")"
+        )
         selected_query = self.client.query(query)
         rows_query = selected_query.result_rows
 
         if rows_query:
             list_rows = [
                 {column: -1 if column == 'sign' else value
-                 for value, column in zip(row[:-2], selected_query.column_names[:-2])}
+                 for value, column in zip(row, selected_query.column_names)}
                 for row in rows_query
             ]
             rows = [list(row.values()) for row in list_rows]
