@@ -345,7 +345,6 @@ class DataCoreClient(Receive):
         """
         data['original_file_parsed_on'] = file_name
         data['sign'] = 1
-        data['is_obsolete'] = False
         data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
