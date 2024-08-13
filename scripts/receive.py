@@ -343,8 +343,8 @@ class DataCoreClient(Receive):
         :param original_date_string:
         :return:
         """
-        data['original_file_parsed_on'] = file_name
         data['sign'] = 1
+        data['original_file_parsed_on'] = file_name
         data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
