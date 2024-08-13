@@ -429,7 +429,13 @@ class DataCoreClient(Receive):
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
         columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.client.insert(table=LOG_TABLE, database="DataCore", data=rows, column_names=columns)
+        self.client.insert(
+            table=LOG_TABLE,
+            database="DataCore",
+            data=rows,
+            column_names=columns,
+            settings={"async_insert": 1, "wait_for_async_insert": 1}
+        )
 
     def handle_rows(self, all_data, data: list, key_deals: str) -> None:
         """
@@ -444,7 +450,13 @@ class DataCoreClient(Receive):
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
-                self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
+                self.client.insert(
+                    table=self.table,
+                    database=self.database,
+                    data=rows,
+                    column_names=columns,
+                    settings={"async_insert": 1, "wait_for_async_insert": 1}
+                )
                 self.logger.info("The data has been uploaded to the database")
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
@@ -459,9 +471,8 @@ class DataCoreClient(Receive):
         :return:
         """
         query = (f"SELECT * FROM {self.database}.{self.table} "
-                 f"LEFT JOIN (SELECT uuid, {self.deal} "
-                 f"FROM {self.database}.{self.table} "
-                 f"GROUP BY uuid, {self.deal} "
+                 f"LEFT JOIN "
+                 f"(SELECT uuid, {self.deal} FROM {self.database}.{self.table} GROUP BY uuid, {self.deal} "
                  f"HAVING sum(sign) > 0) qr ON uuid = qr.uuid "
                  f"WHERE qr.{self.deal} != ''")
         selected_query = self.client.query(query)
@@ -475,9 +486,13 @@ class DataCoreClient(Receive):
             ]
             rows = [list(row.values()) for row in list_rows]
             columns = list(list_rows[0].keys())
-            self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
-
-        # self.client.command(f"OPTIMIZE TABLE {self.database}.{self.table} FINAL")
+            self.client.insert(
+                table=self.table,
+                database=self.database,
+                data=rows,
+                column_names=columns,
+                settings={"async_insert": 1, "wait_for_async_insert": 1}
+            )
         self.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
