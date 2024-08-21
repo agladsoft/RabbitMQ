@@ -780,8 +780,8 @@ class ExportBookings(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['container_size', 'container_count', 'freight_rate']
-        date_columns: list = ['cargo_readiness', 'etd', 'eta', 'booking_date']
+        numeric_columns: list = ['container_size', 'container_count', 'freight_rate', 'teu']
+        date_columns: list = ['cargo_readiness', 'etd', 'eta', 'booking_date', 'sob']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
@@ -811,8 +811,8 @@ class ImportBookings(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['container_size', 'container_count', 'freight_rate']
-        date_columns: list = ['etd', 'eta', 'booking_date']
+        numeric_columns: list = ['container_size', 'container_count', 'freight_rate', 'teu']
+        date_columns: list = ['etd', 'eta', 'booking_date', 'sob']
 
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
