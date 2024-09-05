@@ -162,7 +162,7 @@ class Receive(RabbitMq):
                              f"body_message called. Count messages is {self.count_message}")
             all_data, data, file_name, data_core, key_deals = self.read_json(body)
             if data_core:
-                data_core.handle_rows(all_data, data, file_name, key_deals)
+                data_core.handle_rows(all_data, data, key_deals)
             else:
                 MESSAGE_ERRORS.append(key_deals)
                 data_core_client = DataCoreClient
@@ -210,8 +210,6 @@ class Receive(RabbitMq):
         """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
-        if 0 < len(data) < 20:
-            time_.sleep(0.3)
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
         [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
@@ -345,8 +343,8 @@ class DataCoreClient(Receive):
         :param original_date_string:
         :return:
         """
+        data['sign'] = 1
         data['original_file_parsed_on'] = file_name
-        data['is_obsolete'] = False
         data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
         if original_date_string:
             data[original_date_string] = ''
@@ -430,24 +428,35 @@ class DataCoreClient(Receive):
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
         columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.client.insert(table=LOG_TABLE, database="DataCore", data=rows, column_names=columns)
+        self.client.insert(
+            table=LOG_TABLE,
+            database="DataCore",
+            data=rows,
+            column_names=columns,
+            settings={"async_insert": 1, "wait_for_async_insert": 1}
+        )
 
-    def handle_rows(self, all_data, data: list, file_name: str, key_deals: str) -> None:
+    def handle_rows(self, all_data, data: list, key_deals: str) -> None:
         """
         Counting the number of rows to update transaction data.
         :param all_data:
         :param data:
-        :param file_name:
         :param key_deals:
         :return:
         """
         try:
+            self.update_status(key_deals)
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = [row for row in data[0]] if data else []
             if rows and columns:
-                self.client.insert(table=self.table, database=self.database, data=rows, column_names=columns)
+                self.client.insert(
+                    table=self.table,
+                    database=self.database,
+                    data=rows,
+                    column_names=columns,
+                    settings={"async_insert": 1, "wait_for_async_insert": 1}
+                )
                 self.logger.info("The data has been uploaded to the database")
-            self.update_status(file_name, key_deals)
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
@@ -455,16 +464,35 @@ class DataCoreClient(Receive):
             self.write_to_json(all_data, self.table, dir_name="errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
-    def update_status(self, file_name: str, key_deals: str) -> None:
+    def update_status(self, key_deals: str) -> None:
         """
         Updating the transaction by parameters.
         :return:
         """
-        query: str = f"ALTER TABLE {self.database}.{self.table} " \
-                     f"UPDATE is_obsolete=true, is_obsolete_date='{datetime.now(tz=TZ)}' " \
-                     f"WHERE original_file_parsed_on != '{file_name}' AND is_obsolete=false " \
-                     f"AND {self.deal}='{key_deals}'"
-        self.client.command(query)
+        query = (
+            f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
+            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} = '{key_deals}' "
+            f"GROUP BY uuid HAVING SUM(sign) > 0"
+            f")"
+        )
+        selected_query = self.client.query(query)
+        rows_query = selected_query.result_rows
+
+        if rows_query:
+            list_rows = [
+                {column: -1 if column == 'sign' else value
+                 for value, column in zip(row, selected_query.column_names)}
+                for row in rows_query
+            ]
+            rows = [list(row.values()) for row in list_rows]
+            columns = list(list_rows[0].keys())
+            self.client.insert(
+                table=self.table,
+                database=self.database,
+                data=rows,
+                column_names=columns,
+                settings={"async_insert": 1, "wait_for_async_insert": 1}
+            )
         self.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
