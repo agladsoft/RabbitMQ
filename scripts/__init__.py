@@ -53,6 +53,8 @@ TABLE_NAMES: dict = {
         "accounts",
     "СтавкиФрахта":
         "freight_rates",
+    "Отчет по маржинальности сделок":
+        "marginality_orders_by_act_date",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
