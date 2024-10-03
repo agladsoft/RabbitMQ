@@ -1181,6 +1181,40 @@ class MarginalityOrdersActDate(DataCoreClient):
             data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
 
 
+class RusconProducts(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    @property
+    def original_date_string(self):
+        return "original_kp_date_string"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        date_columns: list = ['kp_date']
+        numeric_columns: list = ['container_size', 'container_count']
+        float_columns: list = ['kp_amount', 'kp_margin']
+
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        for column in numeric_columns:
+            data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+        for column in float_columns:
+            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+
+
 class ManagerEvaluation(DataCoreClient):
     def __init__(self):
         super().__init__()
@@ -1269,6 +1303,7 @@ CLASSES: list = [
     Accounts,
     FreightRates,
     MarginalityOrdersActDate,
+    RusconProducts,
 
     # Данные по оценкам менеджеров
     ManagerEvaluation,
