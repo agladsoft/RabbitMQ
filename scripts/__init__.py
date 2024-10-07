@@ -7,7 +7,7 @@ load_dotenv()
 
 LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
-HOUR: int = 19
+HOUR: int = 16
 
 TABLE_NAMES: dict = {
     # Данные по DC
@@ -53,10 +53,12 @@ TABLE_NAMES: dict = {
         "accounts",
     "СтавкиФрахта":
         "freight_rates",
-    "Отчет по маржинальности сделок":
+    "МаржинальностиСделокНаОсновеАктов":
         "marginality_orders_by_act_date",
     "Продукты":
         "ruscon_products",
+    "СправочникМестоположения":
+        "reference_seaports",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
