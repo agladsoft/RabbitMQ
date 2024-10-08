@@ -1234,7 +1234,10 @@ class ReferenceSeaports(DataCoreClient):
         :return:
         """
         bool_columns: list = ['is_border_crossing']
+        float_columns: list = ['lat_port', 'long_port']
 
+        for column in float_columns:
+            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
         for column in bool_columns:
             if isinstance(data.get(column), str):
                 data[column] = True if data.get(column).upper() == 'ДА' else False
