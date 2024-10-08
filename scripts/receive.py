@@ -1215,7 +1215,7 @@ class RusconProducts(DataCoreClient):
             data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
 
 
-class ReferenceSeaports(DataCoreClient):
+class ReferenceLocations(DataCoreClient):
     def __init__(self):
         super().__init__()
 
@@ -1332,7 +1332,7 @@ CLASSES: list = [
     FreightRates,
     MarginalityOrdersActDate,
     RusconProducts,
-    ReferenceSeaports,
+    ReferenceLocations,
 
     # Данные по оценкам менеджеров
     ManagerEvaluation,

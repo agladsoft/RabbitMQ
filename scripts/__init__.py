@@ -58,7 +58,7 @@ TABLE_NAMES: dict = {
     "ДокументКоммерческоеПредложение":
         "ruscon_products",
     "СправочникМестоположения":
-        "reference_seaports",
+        "reference_locations",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
