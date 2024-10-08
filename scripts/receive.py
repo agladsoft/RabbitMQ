@@ -1227,6 +1227,18 @@ class ReferenceSeaports(DataCoreClient):
     def deal(self):
         return "key_id"
 
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        bool_columns: list = ['is_border_crossing']
+
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
+
 
 class ManagerEvaluation(DataCoreClient):
     def __init__(self):
