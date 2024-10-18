@@ -59,6 +59,8 @@ TABLE_NAMES: dict = {
         "ruscon_products",
     "СправочникМестоположения":
         "reference_locations",
+    "ЕмкостьТерминалов":
+        "terminals_capacity",
 
     # Данные по оценкам менеджеров
     "ОценкиМенеджеров":
