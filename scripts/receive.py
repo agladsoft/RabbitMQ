@@ -1204,7 +1204,7 @@ class RusconProducts(DataCoreClient):
         :return:
         """
         date_columns: list = ['kp_date']
-        numeric_columns: list = ['container_size', 'container_count']
+        numeric_columns: list = ['container_count_40', 'container_count_20']
         float_columns: list = ['kp_amount', 'kp_margin']
 
         for column in date_columns:
@@ -1238,6 +1238,41 @@ class ReferenceLocations(DataCoreClient):
 
         for column in float_columns:
             data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
+
+
+class TerminalsCapacity(DataCoreClient):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def table(self):
+        return self.table
+
+    @property
+    def deal(self):
+        return "key_id"
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, data: dict) -> None:
+        """
+        Changes columns in data.
+        :param data:
+        :return:
+        """
+        numeric_columns: list = ['container_size', 'teu']
+        date_columns: list = ['date']
+        bool_columns: list = ['start_period', 'end_period', 'arrival', 'expenditure']
+
+        for column in numeric_columns:
+            data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))) if data.get(column) else None
+        for column in date_columns:
+            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
         for column in bool_columns:
             if isinstance(data.get(column), str):
                 data[column] = True if data.get(column).upper() == 'ДА' else False
@@ -1333,6 +1368,7 @@ CLASSES: list = [
     MarginalityOrdersActDate,
     RusconProducts,
     ReferenceLocations,
+    TerminalsCapacity,
 
     # Данные по оценкам менеджеров
     ManagerEvaluation,
