@@ -1266,17 +1266,13 @@ class TerminalsCapacity(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['container_size', 'teu']
+        numeric_columns: list = ['container_size', 'teu', 'container_count']
         date_columns: list = ['date']
-        bool_columns: list = ['start_period', 'end_period', 'arrival', 'expenditure']
 
         for column in numeric_columns:
             data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = True if data.get(column).upper() == 'ДА' else False
 
 
 class ManagerEvaluation(DataCoreClient):
