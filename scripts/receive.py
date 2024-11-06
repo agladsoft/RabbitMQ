@@ -259,7 +259,7 @@ class Receive(RabbitMq):
             data_core: Any = data_core()
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
-        self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
+        self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         UPLOAD_TABLES.add(rus_table_name)
         UPLOAD_TABLES_DAY.add(rus_table_name)
         self.write_to_json(all_data, rus_table_name, dir_name="errors")
