@@ -262,6 +262,7 @@ class Receive(RabbitMq):
         self.logger.info(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         UPLOAD_TABLES.add(rus_table_name)
         UPLOAD_TABLES_DAY.add(rus_table_name)
+        self.write_to_json(all_data, rus_table_name, dir_name="errors")
         return all_data, data, None, data_core, key_deals
 
     def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
