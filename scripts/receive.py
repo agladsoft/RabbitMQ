@@ -1130,7 +1130,7 @@ class FreightRates(DataCoreClient):
         float_columns: list = ['rate']
         numeric_columns: list = ['oversized_width', 'oversized_height', 'oversized_length']
         date_columns: list = ['expiration_date', 'start_date']
-        bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate']
+        bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate', 'guideline']
 
         for column in float_columns:
             data[column] = float(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")) \
