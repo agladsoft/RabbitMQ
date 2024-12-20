@@ -1166,7 +1166,7 @@ class MarginalityOrdersActDate(DataCoreClient):
         :param data:
         :return:
         """
-        date_columns: list = ['act_creation_date']
+        date_columns: list = ['act_creation_date', 'act_creation_date_max']
         numeric_columns: list = ['count_ktk_by_order', 'count_ktk_by_operation']
         float_columns: list = [
             'profit_plan', 'variable_costs_plan', 'margin_plan',
