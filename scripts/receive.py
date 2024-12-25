@@ -975,7 +975,7 @@ class DailySummary(DataCoreClient):
             data[column] = int(data.get(column)) if data.get(column) else None
         for column in date_columns:
             data[column] = self.convert_format_date(
-                data.get(column), data, column, F
+                data.get(column), data, column, is_datetime=True
             ) if data.get(column) else None
 
 
