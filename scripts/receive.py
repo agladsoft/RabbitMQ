@@ -1206,9 +1206,13 @@ class RusconProducts(DataCoreClient):
         :param data:
         :return:
         """
+        bool_columns: list = ['dangerous']
         date_columns: list = ['kp_date']
-        numeric_columns: list = ['container_count_40', 'container_count_20']
-        float_columns: list = ['kp_amount', 'kp_margin']
+        numeric_columns: list = [
+            'container_count_40', 'container_count_20', 'container_count', 'container_size',
+            'kp_amount_cost', 'kp_revenue_rate_container_count', 'kp_cost_container'
+        ]
+        float_columns: list = ['kp_amount', 'kp_margin', 'kp_margin_amount', 'kp_margin_container_count']
 
         for column in date_columns:
             data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
@@ -1216,6 +1220,9 @@ class RusconProducts(DataCoreClient):
             data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
         for column in float_columns:
             data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = True if data.get(column).upper() == 'ДА' else False
 
 
 class ReferenceLocations(DataCoreClient):
