@@ -1208,7 +1208,7 @@ class RusconProducts(DataCoreClient):
         """
         bool_columns: list = ['dangerous']
         date_columns: list = ['kp_date']
-        numeric_columns: list = ['container_count_40', 'container_count_20', 'container_count', 'container_size']
+        numeric_columns: list = ['container_count_40', 'container_count_20', 'container_count']
         float_columns: list = [
             'kp_amount', 'kp_margin', 'kp_margin_amount', 'kp_margin_container',
             'kp_amount_cost', 'kp_revenue_rate_container', 'kp_cost_container'
