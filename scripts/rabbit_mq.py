@@ -1,6 +1,6 @@
 import pika
 from typing import Optional
-from __init__ import get_my_env_var
+from scripts.__init__ import get_my_env_var
 from pika.adapters.blocking_connection import BlockingChannel
 
 

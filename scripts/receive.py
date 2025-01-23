@@ -5,11 +5,11 @@ import copy
 import requests
 import contextlib
 import time as time_
-from __init__ import *
 from pathlib import Path
 from pika.spec import Basic
-from rabbit_mq import RabbitMq
+from scripts.__init__ import *
 from pika import BasicProperties
+from scripts.rabbit_mq import RabbitMq
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
@@ -20,6 +20,9 @@ DATE_FORMATS: tuple = (
     "%Y-%m-%dT%H:%M:%SZ",
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%dT%H:%M:%S%z",
+    "%d.%m.%YT%H:%M:%SZ",
+    "%d.%m.%YT%H:%M:%S",
+    "%d.%m.%YT%H:%M:%S%z",
     "%d.%m.%Y %H:%M:%S",
     "%Y-%m-%d %H:%M:%S",
     "%d.%m.%Y",
@@ -29,11 +32,10 @@ TZ: pytz.timezone = pytz.timezone("Europe/Moscow")
 MESSAGE_ERRORS: list = []
 UPLOAD_TABLES_DAY: set = set()
 UPLOAD_TABLES: set = set()
-REQUIRED_TIME: time = time(hour=HOUR, minute=58)
 
 
 def serialize_datetime(obj):
-    if isinstance(obj, datetime) or isinstance(obj, date):
+    if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     raise TypeError("Type not serializable")
 
@@ -69,28 +71,30 @@ class Receive(RabbitMq):
 
         :return:
         """
-        current_time = datetime.today()
+        current_time = datetime.now()
         with open(LOG_FILE, 'w') as file:
             file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
                        f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}")
 
-    def check_and_update_log(self):
-        """
-
-        :return:
-        """
+    def check_and_update_log(
+        self,
+        current_time: time = datetime.now().time().replace(second=0, microsecond=0),
+        required_time: time = time(hour=16, minute=58),
+        time_sleep: int = 180
+    ):
         global UPLOAD_TABLES_DAY
-        current_time = datetime.now().time().replace(second=0, microsecond=0)
-        if current_time >= REQUIRED_TIME and self.is_greater_time:
+        if current_time >= required_time and self.is_greater_time:
             self.logger.info("Created log file for writing count messages")
             self.create_log_file()
             UPLOAD_TABLES_DAY = set()
             self.count_message = 0
             self.is_greater_time = False
-            time_.sleep(180)
-        elif current_time <= REQUIRED_TIME and not self.is_greater_time:
-            self.logger.info("current_time lesser REQUIRED_TIME and self.is_greater_time = True")
+            time_.sleep(time_sleep)
+            return True
+        elif current_time <= required_time and not self.is_greater_time:
+            self.logger.info("current_time lesser required_time and self.is_greater_time = True")
             self.is_greater_time = True
+        return False
 
     def check_queue_empty(self):
         """
@@ -139,11 +143,11 @@ class Receive(RabbitMq):
                 )
 
     def callback(
-            self,
-            ch: Union[BlockingChannel, str],
-            method: Union[Basic.Deliver, str],
-            properties: Union[BasicProperties, str],
-            body: Union[bytes, str]
+        self,
+        ch: Union[BlockingChannel, str],
+        method: Union[Basic.Deliver, str],
+        properties: Union[BasicProperties, str],
+        body: Union[bytes, str]
     ) -> None:
         """
         Working with the message body
@@ -175,28 +179,11 @@ class Receive(RabbitMq):
             self.logger.error(f"ConnectionError is {ex}")
             all_data, rus_table_name, key_deals = self.read_msg(body)
             MESSAGE_ERRORS.append(key_deals)
-            self.write_to_json(all_data, "unknown", dir_name="errors")
+            self.write_to_json(all_data, "unknown", dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
         finally:
             self.check_queue_empty()
-            delivery_tag = method.delivery_tag if not isinstance(method, str) else None
+            delivery_tag = None if isinstance(method, str) else method.delivery_tag
             self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
-
-    @staticmethod
-    def save_text_msg(msg: Union[bytes, bytearray]) -> None:
-        """
-
-        :param msg:
-        :return:
-        """
-        if isinstance(msg, (bytes, bytearray)):
-            json_msg = json.loads(msg.decode('utf8'))
-            file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/" \
-                             f"{datetime.now(tz=TZ)}-{json_msg['header']['report']}-text_msg.json"
-            fle: Path = Path(file_name)
-            if not os.path.exists(os.path.dirname(fle)):
-                os.makedirs(os.path.dirname(fle))
-            with open(file_name, 'w') as file:
-                json.dump(json_msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
 
     def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
         """
@@ -212,12 +199,15 @@ class Receive(RabbitMq):
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         list_columns_db: list = data_core.get_table_columns()
         original_date_string: str = data_core.original_date_string
-        [list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db]
+        [
+            list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db
+            if remove_column in list_columns_db
+        ]
         try:
             for i, row in enumerate(data):
                 data[i] = data_core.convert_to_lowercase(row)
                 data_core.add_new_columns(data[i], file_name, original_date_string)
-                data_core.change_columns(data[i])
+                data_core.change_columns(data=data[i])
                 if original_date_string:
                     data[i][original_date_string] = data[i][original_date_string].strip() \
                         if data[i][original_date_string] else None
@@ -225,24 +215,32 @@ class Receive(RabbitMq):
             self.logger.error(f"An error was received when converting data types. "
                               f"Table is {eng_table_name}. Exception is {ex}")
             MESSAGE_ERRORS.append(key_deals)
-            self.write_to_json(all_data, eng_table_name, dir_name="errors")
+            self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
-            raise AssertionError("Stop consuming because receive an error where converting data types")
+            raise AssertionError(
+                "Stop consuming because receive an error where converting data types"
+            ) from ex
         if data:
             list_columns_rabbit: list = list(data[0].keys())
-            data_core.check_difference_columns(all_data, eng_table_name, list_columns_db, list_columns_rabbit,
-                                               key_deals)
+            if _ := data_core.check_difference_columns(
+                all_data,
+                eng_table_name,
+                list_columns_db,
+                list_columns_rabbit,
+                key_deals,
+            ):
+                raise AssertionError("Stop consuming because columns is different")
         return file_name
 
     @staticmethod
-    def read_msg(msg: str) -> Tuple[dict, str, str]:
+    def read_msg(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
         msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def read_json(self, msg: str) -> Tuple[dict, list, Optional[str], Any, str]:
+    def read_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
         """
         Decoding a message and working with data.
         :param msg:
@@ -262,10 +260,14 @@ class Receive(RabbitMq):
         self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         UPLOAD_TABLES.add(rus_table_name)
         UPLOAD_TABLES_DAY.add(rus_table_name)
-        self.write_to_json(all_data, rus_table_name, dir_name="errors")
+        self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
         return all_data, data, None, data_core, key_deals
 
-    def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
+    def write_to_json(
+        self, msg: dict,
+        eng_table_name: str,
+        dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
+    ) -> str:
         """
         Write data to json file
         :param msg:
@@ -274,13 +276,17 @@ class Receive(RabbitMq):
         :return:
         """
         self.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
-        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}" \
-                         f".json"
+
+        file_name: str = f"{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}.json"
         fle: Path = Path(file_name)
-        if not os.path.exists(os.path.dirname(fle)):
-            os.makedirs(os.path.dirname(fle))
+
+        if not os.path.exists(fle.parent):  # Проверяем, существует ли директория
+            os.makedirs(fle.parent)  # Создаем директорию, если не существует
+
         with open(file_name, 'w') as file:
             json.dump(msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
+
+        return file_name
 
 
 class DataCoreClient(Receive):
@@ -288,6 +294,7 @@ class DataCoreClient(Receive):
         super().__init__()
         self.client: Client = self.connect_to_db()
         self.removed_columns_db = ['uuid']
+        self._original_date_string: Optional[str] = None
 
     @property
     def database(self):
@@ -307,15 +314,43 @@ class DataCoreClient(Receive):
 
     @property
     def original_date_string(self):
-        return None
+        return self._original_date_string
 
-    def change_columns(self, data: dict) -> None:
+    @original_date_string.setter
+    def original_date_string(self, value):
+        self._original_date_string: str = value
+
+    def change_columns(self, data: dict, *args, **kwargs) -> None:
         """
-        Changes columns in data.
-        :param data:
-        :return:
+        Change columns in data using *args and **kwargs.
+        :param data: Dictionary with data to process.
+        :param args: Positional arguments (optional).
+        :param kwargs: Keyword arguments for column lists and additional flags.
         """
-        pass
+        float_columns = kwargs.get('float_columns', [])
+        int_columns = kwargs.get('int_columns', [])
+        date_columns = kwargs.get('date_columns', [])
+        bool_columns = kwargs.get('bool_columns', [])
+        is_datetime = kwargs.get('is_datetime', False)
+
+        for column in float_columns:
+            data[column] = float(
+                re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")
+            ) if data.get(column) else None
+
+        for column in int_columns:
+            data[column] = int(
+                re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))
+            ) if data.get(column) else None
+
+        for column in date_columns:
+            data[column] = self.convert_format_date(
+                data.get(column), data, column, is_datetime=is_datetime
+            ) if data.get(column) else None
+
+        for column in bool_columns:
+            if isinstance(data.get(column), str):
+                data[column] = data.get(column).upper() == 'ДА'
 
     def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> Union[datetime, str]:
         """
@@ -360,13 +395,13 @@ class DataCoreClient(Receive):
         return {k.lower(): v for k, v in data.items()}
 
     def check_difference_columns(
-            self,
-            all_data: dict,
-            eng_table_name: str,
-            list_columns_db: list,
-            list_columns_rabbit: list,
-            key_deals: str
-    ) -> None:
+        self,
+        all_data: dict,
+        eng_table_name: str,
+        list_columns_db: list,
+        list_columns_rabbit: list,
+        key_deals: str
+    ) -> list:
         """
 
         :param all_data:
@@ -382,9 +417,10 @@ class DataCoreClient(Receive):
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
             MESSAGE_ERRORS.append(key_deals)
-            self.write_to_json(all_data, eng_table_name, dir_name="errors")
+            self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
-            raise AssertionError("Stop consuming because columns is different")
+            return diff_db + diff_rabbit
+        return []
 
     def connect_to_db(self) -> Client:
         """
@@ -398,7 +434,7 @@ class DataCoreClient(Receive):
             self.logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            raise ConnectionError
+            raise ConnectionError from ex_connect
         return client
 
     def get_table_columns(self):
@@ -448,7 +484,7 @@ class DataCoreClient(Receive):
         try:
             self.update_status(key_deals)
             rows = [list(row.values()) for row in data] if data else [[]]
-            columns = [row for row in data[0]] if data else []
+            columns = list(data[0]) if data else []
             if rows and columns:
                 self.client.insert(
                     table=self.table,
@@ -462,7 +498,7 @@ class DataCoreClient(Receive):
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             MESSAGE_ERRORS.append(key_deals)
-            self.write_to_json(all_data, self.table, dir_name="errors")
+            self.write_to_json(all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
     def update_status(self, key_deals: str) -> None:
@@ -477,9 +513,7 @@ class DataCoreClient(Receive):
             f")"
         )
         selected_query = self.client.query(query)
-        rows_query = selected_query.result_rows
-
-        if rows_query:
+        if rows_query := selected_query.result_rows:
             list_rows = [
                 {column: -1 if column == 'sign' else value
                  for value, column in zip(row, selected_query.column_names)}
@@ -529,22 +563,25 @@ class DataCoreFreight(DataCoreClient):
     def original_date_string(self):
         return "original_voyage_month_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['voyage_date', 'operation_date']
-        numeric_columns: list = ['container_count', 'container_size', 'operation_month']
+        data: dict = kwargs.get('data')
 
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        super().change_columns(
+            data=data,
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_count', 'container_size', 'operation_month'],
+            date_columns=['voyage_date', 'operation_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
-        data['voyage_month'] = self.convert_format_date(data.get('voyage_month'), data, 'voyage_month').month \
-            if data.get('voyage_month') else None
+        data['voyage_month'] = data['voyage_month']['voyage_month'].month if data.get('voyage_month') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
@@ -563,19 +600,21 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
     def original_date_string(self):
         return "original_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['date']
-        numeric_columns: list = ['year', 'month']
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['year', 'month'],
+            date_columns=['date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class CounterParties(DataCoreClient):
@@ -607,16 +646,21 @@ class OrdersReport(DataCoreClient):
     def original_date_string(self):
         return "original_voyage_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['voyage_date']
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['voyage_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class AutoPickupGeneralReport(DataCoreClient):
@@ -635,30 +679,29 @@ class AutoPickupGeneralReport(DataCoreClient):
     def original_date_string(self):
         return "original_date_delivery_plan_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = [
-            'date_delivery_empty_fact', 'date_delivery_empty_plan', 'date_loading_fact',
-            'date_delivery_fact', 'date_receiving_empty_fact', 'date_delivery_plan',
-            'date_loading_plan', 'date_receiving_empty_plan'
-        ]
-        numeric_columns: list = ['container_size']
-        float_columns: list = [
-            'overpayment', 'downtime_amount', 'agreed_rate',
-            'total_rate', 'carrier_rate', 'economy',
-            'overload_amount', 'add_expense_amount'
-        ]
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
-        for column in float_columns:
-            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=[
+                'overpayment', 'downtime_amount', 'agreed_rate',
+                'total_rate', 'carrier_rate', 'economy',
+                'overload_amount', 'add_expense_amount'
+            ],
+            int_columns=['container_size'],
+            date_columns=[
+                'date_delivery_empty_fact', 'date_delivery_empty_plan', 'date_loading_fact',
+                'date_delivery_fact', 'date_receiving_empty_fact', 'date_delivery_plan',
+                'date_loading_plan', 'date_receiving_empty_plan'
+            ],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class TransportUnits(DataCoreClient):
@@ -690,19 +733,21 @@ class Consignments(DataCoreClient):
     def original_date_string(self):
         return "original_voyage_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['voyage_date']
-        numeric_columns: list = ['container_size', 'teu', 'year']
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'teu', 'year'],
+            date_columns=['voyage_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class SalesPlan(DataCoreClient):
@@ -717,16 +762,21 @@ class SalesPlan(DataCoreClient):
     def deal(self):
         return "key_id"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['teu', 'container_count', 'container_size', 'year', 'month']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['teu', 'container_count', 'container_size', 'year', 'month'],
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class NaturalIndicatorsTransactionFactDate(DataCoreClient):
@@ -745,22 +795,24 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
     def original_date_string(self):
         return "original_operation_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = [
-            'container_size', 'operation_month', 'container_count',
-            'teu', 'operation_year'
-        ]
-        date_columns: list = ['operation_date', 'order_date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=[
+                'container_size', 'operation_month', 'container_count',
+                'teu', 'operation_year'
+            ],
+            date_columns=['operation_date', 'order_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class DevelopmentCounterpartyDepartment(DataCoreClient):
@@ -775,16 +827,21 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
     def deal(self):
         return "key_id"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['year']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['year'],
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class ExportBookings(DataCoreClient):
@@ -803,19 +860,21 @@ class ExportBookings(DataCoreClient):
     def original_date_string(self):
         return "original_booking_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['container_size', 'container_count', 'freight_rate', 'teu']
-        date_columns: list = ['cargo_readiness', 'etd', 'eta', 'booking_date', 'sob']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'container_count', 'freight_rate', 'teu'],
+            date_columns=['cargo_readiness', 'etd', 'eta', 'booking_date', 'sob'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class ImportBookings(DataCoreClient):
@@ -834,19 +893,21 @@ class ImportBookings(DataCoreClient):
     def original_date_string(self):
         return "original_booking_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['container_size', 'container_count', 'freight_rate', 'teu']
-        date_columns: list = ['etd', 'eta', 'booking_date', 'sob']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'container_count', 'freight_rate', 'teu'],
+            date_columns=['etd', 'eta', 'booking_date', 'sob'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class CompletedRepackagesReport(DataCoreClient):
@@ -865,22 +926,24 @@ class CompletedRepackagesReport(DataCoreClient):
     def original_date_string(self):
         return "original_repacking_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = [
-            'warehouse_wms_count', 'inspection_container_count', 'import_teu',
-            'import_container_count', 'export_teu', 'export_container_count'
-        ]
-        date_columns: list = ['repacking_date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=[
+                'warehouse_wms_count', 'inspection_container_count', 'import_teu',
+                'import_container_count', 'export_teu', 'export_container_count'
+            ],
+            date_columns=['repacking_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class AutoVisits(DataCoreClient):
@@ -899,21 +962,21 @@ class AutoVisits(DataCoreClient):
     def original_date_string(self):
         return "original_entry_datetime_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['processing_time', 'waiting_time']
-        date_columns: list = ['exit_datetime', 'entry_datetime', 'registration_datetime']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(
-                data.get(column), data, column, is_datetime=True
-            ) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['processing_time', 'waiting_time'],
+            date_columns=['exit_datetime', 'entry_datetime', 'registration_datetime'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
 
 
 class AccountingDocumentsRequests(DataCoreClient):
@@ -932,18 +995,21 @@ class AccountingDocumentsRequests(DataCoreClient):
     def original_date_string(self):
         return "original_request_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['start_date', 'end_date', 'request_date']
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(
-                data.get(column), data, column, is_datetime=True
-            ) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['start_date', 'end_date', 'request_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
 
 
 class DailySummary(DataCoreClient):
@@ -962,21 +1028,21 @@ class DailySummary(DataCoreClient):
     def original_date_string(self):
         return "original_motion_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['cargo_weight', 'tare_weight', 'tonnage', 'container_size']
-        date_columns: list = ['motion_date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(
-                data.get(column), data, column, is_datetime=True
-            ) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['cargo_weight', 'tare_weight', 'tonnage', 'container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
 
 
 class RZHDOperationsReport(DataCoreClient):
@@ -995,19 +1061,21 @@ class RZHDOperationsReport(DataCoreClient):
     def original_date_string(self):
         return "original_operation_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['container_size', 'operation_month', 'operation_year']
-        date_columns: list = ['operation_date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'operation_month', 'operation_year'],
+            date_columns=['operation_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class OrdersMarginalityReport(DataCoreClient):
@@ -1026,23 +1094,25 @@ class OrdersMarginalityReport(DataCoreClient):
     def original_date_string(self):
         return "original_order_creation_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        float_columns: list = [
-            'expenses_rental_without_vat_fact', 'income_without_vat_fact', 'profit_plan',
-            'income_without_vat_plan', 'expenses_without_vat_plan', 'expenses_without_vat_fact',
-            'profit_fact'
-        ]
-        date_columns: list = ['order_creation_date']
-
-        for column in float_columns:
-            data[column] = float(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=[
+                'expenses_rental_without_vat_fact', 'income_without_vat_fact', 'profit_plan',
+                'income_without_vat_plan', 'expenses_without_vat_plan', 'expenses_without_vat_fact',
+                'profit_fact'
+            ],
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['order_creation_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
@@ -1061,19 +1131,21 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
     def original_date_string(self):
         return "original_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['container_size', 'container_count', 'teu', 'internal_customs_transit']
-        date_columns: list = ['date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'container_count', 'teu', 'internal_customs_transit'],
+            date_columns=['date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class Accounts(DataCoreClient):
@@ -1092,19 +1164,21 @@ class Accounts(DataCoreClient):
     def original_date_string(self):
         return "original_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        float_columns: list = ['profit_account_rub', 'profit_account']
-        date_columns: list = ['date']
-
-        for column in float_columns:
-            data[column] = float(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['profit_account_rub', 'profit_account'],
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class FreightRates(DataCoreClient):
@@ -1123,27 +1197,21 @@ class FreightRates(DataCoreClient):
     def original_date_string(self):
         return "original_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        float_columns: list = ['rate']
-        numeric_columns: list = ['oversized_width', 'oversized_height', 'oversized_length']
-        date_columns: list = ['expiration_date', 'start_date']
-        bool_columns: list = ['priority', 'oversized', 'dangerous', 'special_rate', 'guideline']
-
-        for column in float_columns:
-            data[column] = float(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")) \
-                if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = True if data.get(column).upper() == 'ДА' else False
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['rate'],
+            int_columns=['oversized_width', 'oversized_height', 'oversized_length'],
+            date_columns=['expiration_date', 'start_date'],
+            bool_columns=['priority', 'oversized', 'dangerous', 'special_rate', 'guideline'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class MarginalityOrdersActDate(DataCoreClient):
@@ -1162,26 +1230,25 @@ class MarginalityOrdersActDate(DataCoreClient):
     def original_date_string(self):
         return "original_act_creation_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        date_columns: list = ['act_creation_date', 'act_creation_date_max']
-        numeric_columns: list = ['count_ktk_by_order', 'count_ktk_by_operation']
-        float_columns: list = [
-            'profit_plan', 'variable_costs_plan', 'margin_plan',
-            'profit_fact', 'variable_costs_fact', 'margin_fact',
-            'margin_fact_percent', 'margin_fact_per_unit'
-        ]
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
-        for column in float_columns:
-            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=[
+                'profit_plan', 'variable_costs_plan', 'margin_plan',
+                'profit_fact', 'variable_costs_fact', 'margin_fact',
+                'margin_fact_percent', 'margin_fact_per_unit'
+            ],
+            int_columns=['count_ktk_by_order', 'count_ktk_by_operation'],
+            date_columns=['act_creation_date', 'act_creation_date_max'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class RusconProducts(DataCoreClient):
@@ -1200,29 +1267,24 @@ class RusconProducts(DataCoreClient):
     def original_date_string(self):
         return "original_kp_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        bool_columns: list = ['dangerous']
-        date_columns: list = ['kp_date']
-        numeric_columns: list = ['container_count_40', 'container_count_20', 'container_count']
-        float_columns: list = [
-            'kp_amount', 'kp_margin', 'kp_margin_amount', 'kp_margin_container',
-            'kp_amount_cost', 'kp_revenue_rate_container', 'kp_cost_container'
-        ]
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
-        for column in numeric_columns:
-            data[column] = int(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
-        for column in float_columns:
-            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = True if data.get(column).upper() == 'ДА' else False
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=[
+                'kp_amount', 'kp_margin', 'kp_margin_amount', 'kp_margin_container',
+                'kp_amount_cost', 'kp_revenue_rate_container', 'kp_cost_container'
+            ],
+            int_columns=['container_count_40', 'container_count_20', 'container_count'],
+            date_columns=['kp_date'],
+            bool_columns=['dangerous'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class ReferenceLocations(DataCoreClient):
@@ -1237,20 +1299,21 @@ class ReferenceLocations(DataCoreClient):
     def deal(self):
         return "key_id"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        bool_columns: list = ['is_border_crossing']
-        float_columns: list = ['lat_port', 'long_port']
-
-        for column in float_columns:
-            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = True if data.get(column).upper() == 'ДА' else False
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['lat_port', 'long_port'],
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=['is_border_crossing'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class TerminalsCapacity(DataCoreClient):
@@ -1269,19 +1332,21 @@ class TerminalsCapacity(DataCoreClient):
     def original_date_string(self):
         return "original_date_string"
 
-    def change_columns(self, data: dict) -> None:
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['container_size', 'teu', 'container_count']
-        date_columns: list = ['date']
-
-        for column in numeric_columns:
-            data[column] = int(re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['container_size', 'teu', 'container_count'],
+            date_columns=['date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class ManagerEvaluation(DataCoreClient):
@@ -1303,20 +1368,22 @@ class ManagerEvaluation(DataCoreClient):
     @property
     def original_date_string(self):
         return "original_date_string"
-
-    def change_columns(self, data: dict) -> None:
+    
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        numeric_columns: list = ['evaluation']
-        date_columns: list = ['evaluation_date']
-
-        for column in numeric_columns:
-            data[column] = int(data.get(column)) if data.get(column) else None
-        for column in date_columns:
-            data[column] = self.convert_format_date(data.get(column), data, column) if data.get(column) else None
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=['evaluation'],
+            date_columns=['evaluation_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 class ReferenceCounterparties(DataCoreClient):
@@ -1334,18 +1401,22 @@ class ReferenceCounterparties(DataCoreClient):
     @property
     def deal(self):
         return "key_id"
-
-    def change_columns(self, data: dict) -> None:
+    
+    def change_columns(self, *args, **kwargs) -> None:
         """
         Changes columns in data.
-        :param data:
+        :param args:
+        :param kwargs:
         :return:
         """
-        bool_columns: list = ['is_control', 'is_foreign_company']
-
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = True if data.get(column).upper() == 'ДА' else False
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=['is_control', 'is_foreign_company'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
 
 
 CLASSES: list = [
@@ -1382,10 +1453,7 @@ CLASSES: list = [
     # Данные по справочнику контрагентов
     ReferenceCounterparties
 ]
+CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    CLASS_NAMES_AND_TABLES: dict = {
-        table_name: class_name
-        for table_name, class_name in zip(list(TABLE_NAMES.values()), CLASSES)
-    }
     Receive().main()

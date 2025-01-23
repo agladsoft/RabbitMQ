@@ -7,7 +7,6 @@ load_dotenv()
 
 LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
-HOUR: int = 16
 
 TABLE_NAMES: dict = {
     # Данные по DC
