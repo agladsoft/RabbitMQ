@@ -581,7 +581,8 @@ class DataCoreFreight(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
-        data['voyage_month'] = data['voyage_month']['voyage_month'].month if data.get('voyage_month') else None
+        data['voyage_month'] = self.convert_format_date(data.get('voyage_month'), data, 'voyage_month').month \
+            if data.get('voyage_month') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
