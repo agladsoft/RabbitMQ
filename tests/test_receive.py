@@ -101,6 +101,21 @@ LIST_COLUMNS: list = [
 
 @pytest.fixture
 def mock_main(mocker):
+    """
+    Fixture for mocking all the main methods of class Receive and DataCoreClient.
+
+    It patches the following methods:
+    - Receive.main
+    - Receive.check_queue_empty
+    - DataCoreClient.connect_to_db
+    - DataCoreClient.handle_rows
+    - DataCoreClient.insert_message
+    - DataCoreClient.update_status
+    - DataCoreClient.delete_old_deals
+    - DataCoreClient.get_table_columns
+    :param mocker: Mocker fixture
+    :return:
+    """
     mocker.patch("scripts.receive.Receive.main")
     mocker.patch("scripts.receive.Receive.check_queue_empty", return_value=200)
     mocker.patch("scripts.receive.DataCoreClient.connect_to_db", return_value=MagicMock())
@@ -113,6 +128,14 @@ def mock_main(mocker):
 
 @pytest.fixture
 def receive_instance(mock_main):
+    """
+    Fixture for creating an instance of class Receive
+
+    It creates an instance of class Receive and calls its main method.
+    The main method is patched in fixture mock_main.
+    :param mock_main: An instance of class Receive
+    :return:
+    """
     obj = Receive()
     obj.main()
     return obj
@@ -120,6 +143,14 @@ def receive_instance(mock_main):
 
 @pytest.fixture
 def datacore_client_instance(mock_main):
+    """
+    Fixture for creating an instance of class DataCoreClient
+
+    It creates an instance of class DataCoreClient.
+    The connect_to_db method of DataCoreClient is patched in fixture mock_main.
+    :param mock_main: An instance of class DataCoreClient
+    :return:
+    """
     return DataCoreClient()
 
 
@@ -142,6 +173,20 @@ def test_receive_check_and_update_log(receive_instance, current_time: time, requ
     ("read_msg", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
 ])
 def test_receive_methods(receive_instance, method, expected):
+    """
+    Tests methods read_json and read_msg of class Receive.
+
+    Method read_json reads a json file and returns the data from the file,
+    an instance of RZHDOperationsReport class and a message id.
+
+    Method read_msg reads a message from RabbitMQ and returns the data from
+    the message, an instance of RZHDOperationsReport class and a message id.
+
+    :param receive_instance: An instance of class Receive
+    :param method: A string with the name of the method to test
+    :param expected: A tuple with the expected result
+    :return:
+    """
     result = getattr(receive_instance, method)(MESSAGE_BODY)
     assert result[0] == expected[0]
     assert result[-1] == expected[-1]
@@ -151,12 +196,26 @@ def test_receive_methods(receive_instance, method, expected):
     (MESSAGE_BODY, RZHDOperationsReport, "rzhd_by_operations_report", "24d198ac-1be2-11ef-809d-00505688b7b7"),
 ])
 def test_receive_parse_data(
-        receive_instance,
-        all_data: dict,
-        data_core: Any,
-        eng_table_name: str,
-        key_deals: str
+    receive_instance,
+    all_data: dict,
+    data_core: Any,
+    eng_table_name: str,
+    key_deals: str
 ):
+    """
+    Tests the parse_data method of the Receive class.
+
+    The parse_data method processes the given data and generates a file name
+    based on the provided table name and key deals. This test verifies that
+    the generated file name contains the expected English table name.
+
+    :param receive_instance: An instance of the Receive class
+    :param all_data: A dictionary containing the data to be processed
+    :param data_core: An instance of a data core class or any relevant type
+    :param eng_table_name: A string representing the expected table name in English
+    :param key_deals: A string representing the key deals identifier
+    :return:
+    """
     data = copy.deepcopy(MESSAGE_BODY).get("data", [])
     file_name = receive_instance.parse_data(all_data, data, data_core(), eng_table_name, key_deals)
 
@@ -164,6 +223,17 @@ def test_receive_parse_data(
 
 
 def test_receive_write_to_json(receive_instance: Receive, tmp_path: PosixPath) -> None:
+    """
+    Tests the write_to_json method of the Receive class.
+
+    The write_to_json method writes the given data to a JSON file
+    in the specified directory. This test verifies that a file is
+    created and contains the expected data.
+
+    :param receive_instance: An instance of the Receive class
+    :param tmp_path: A temporary directory
+    :return:
+    """
     file_name: str = receive_instance.write_to_json(MESSAGE_BODY, "rzhd_test", dir_name=str(tmp_path))
     output_file: PosixPath = tmp_path / os.path.basename(file_name)
     assert output_file.exists()
@@ -182,6 +252,18 @@ def test_receive_write_to_json(receive_instance: Receive, tmp_path: PosixPath) -
     ({"kEY": "value"}, {"key": "value"}),
 ])
 def test_datacore_convert_to_lowercase(datacore_client_instance, data, expected):
+    """
+    Tests the convert_to_lowercase method of the DataCoreClient class.
+
+    The convert_to_lowercase method converts the keys of the input dictionary
+    to lowercase. This test verifies that the method correctly transforms
+    keys to lowercase for various input cases.
+
+    :param datacore_client_instance: An instance of the DataCoreClient class
+    :param data: A dictionary with keys to be converted to lowercase
+    :param expected: The expected dictionary with lowercase keys
+    :return: None
+    """
     assert datacore_client_instance.convert_to_lowercase(data) == expected
 
 
@@ -213,6 +295,20 @@ def test_datacore_convert_to_lowercase(datacore_client_instance, data, expected)
     ),
 ])
 def test_datacore_change_columns(datacore_client_instance, data, columns, expected):
+    """
+    Tests the change_columns method of the DataCoreClient class.
+
+    The change_columns method processes the given data and transforms the values
+    of the specified columns according to the given parameters. This test verifies
+    that the method correctly transforms the values of the columns for various
+    input cases.
+
+    :param datacore_client_instance: An instance of the DataCoreClient class
+    :param data: A dictionary with data to be processed
+    :param columns: A dictionary with parameters for column transformation
+    :param expected: The expected dictionary with transformed data
+    :return: None
+    """
     datacore_client_instance.change_columns(data, **columns)
     assert data == expected
 
@@ -224,6 +320,23 @@ def test_datacore_change_columns(datacore_client_instance, data, columns, expect
     ({"key": "value"}, ["col1"], ["col2"], ["col1", "col2"]),
 ])
 def test_datacore_check_difference_columns(datacore_client_instance, all_data, db_columns, rabbit_columns, expected):
+    """
+    Tests the check_difference_columns method of the DataCoreClient class.
+
+    The check_difference_columns method takes in all_data, db_columns, rabbit_columns
+    and key_deals as parameters. It returns a list of column names which are not
+    present in either the database or the RabbitMQ message. The test verifies that
+    the method correctly identifies these columns by comparing the result with the
+    expected output.
+
+    :param datacore_client_instance: An instance of the DataCoreClient class
+    :param all_data: A dictionary with data to be processed
+    :param db_columns: A list of column names present in the database
+    :param rabbit_columns: A list of column names present in the RabbitMQ message
+    :param expected: The expected list of columns which are not present in either
+                     the database or the RabbitMQ message
+    :return: None
+    """
     result = datacore_client_instance.check_difference_columns(
         all_data, "table", db_columns, rabbit_columns, "key"
     )
@@ -244,6 +357,22 @@ def test_datacore_convert_format_date(
         is_datetime: bool,
         expected: Union[date, datetime]
 ):
+    """
+    Tests the convert_format_date method of the DataCoreClient class.
+
+    The convert_format_date method takes in a date string, a dictionary with data
+    to be processed, a column name and a boolean indicating whether the date
+    string represents a datetime or a date. It returns the parsed date or
+    datetime. The test verifies that the method correctly parses the date string
+    for various input cases.
+
+    :param datacore_client_instance: An instance of the DataCoreClient class
+    :param date_string: A string representing a date or datetime
+    :param is_datetime: A boolean indicating whether the date string represents
+                        a datetime or a date
+    :param expected: The expected parsed date or datetime
+    :return: None
+    """
     data: dict = {"original_date_string": ''}
     datacore_client_instance.original_date_string = list(data.keys())[0]
     result: Union[date, datetime] = datacore_client_instance.convert_format_date(
