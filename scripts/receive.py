@@ -340,7 +340,7 @@ class DataCoreClient(Receive):
 
         for column in int_columns:
             data[column] = int(
-                re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))
+                re.sub(r'(?<=\d)\s+(?=\d)', '', data.get(column))
             ) if data.get(column) else None
 
         for column in date_columns:
