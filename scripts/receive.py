@@ -576,13 +576,12 @@ class DataCoreFreight(DataCoreClient):
             data=data,
             float_columns=kwargs.get('float_columns', []),
             int_columns=['container_count', 'container_size', 'operation_month'],
-            date_columns=['voyage_date', 'operation_date'],
+            date_columns=['voyage_date', 'operation_date', 'voyage_month'],
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
 
-        data['voyage_month'] = self.convert_format_date(data.get('voyage_month'), data, 'voyage_month').month \
-            if data.get('voyage_month') else None
+        data['voyage_month'] = data['voyage_month'].month if data.get('voyage_month') else None
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
