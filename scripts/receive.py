@@ -968,8 +968,8 @@ class DailySummary(DataCoreClient):
         :param data:
         :return:
         """
-        float_columns: list = ['tonnage']
-        numeric_columns: list = ['cargo_weight', 'tare_weight', 'container_size']
+        float_columns: list = ['tonnage', 'cargo_weight']
+        numeric_columns: list = ['tare_weight', 'container_size']
         date_columns: list = ['motion_date']
 
         for column in float_columns:
