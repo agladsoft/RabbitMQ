@@ -968,9 +968,12 @@ class DailySummary(DataCoreClient):
         :param data:
         :return:
         """
-        numeric_columns: list = ['cargo_weight', 'tare_weight', 'tonnage', 'container_size']
+        float_columns: list = ['tonnage']
+        numeric_columns: list = ['cargo_weight', 'tare_weight', 'container_size']
         date_columns: list = ['motion_date']
 
+        for column in float_columns:
+            data[column] = float(re.sub(r'\s', '', str(data.get(column)))) if data.get(column) else None
         for column in numeric_columns:
             data[column] = int(data.get(column)) if data.get(column) else None
         for column in date_columns:
