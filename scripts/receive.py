@@ -345,7 +345,7 @@ class DataCoreClient(Receive):
 
         for column in date_columns:
             data[column] = self.convert_format_date(
-                str(data.get(column)), data, column, is_datetime=is_datetime
+                data.get(column), data, column, is_datetime=is_datetime
             ) if data.get(column) else None
 
         for column in bool_columns:
@@ -1037,8 +1037,8 @@ class DailySummary(DataCoreClient):
         """
         super().change_columns(
             data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['cargo_weight', 'tare_weight', 'tonnage', 'container_size'],
+            float_columns=['tonnage'],
+            int_columns=['cargo_weight', 'tare_weight', 'container_size'],
             date_columns=['motion_date'],
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=True
