@@ -327,11 +327,11 @@ class DataCoreClient(Receive):
         :param args: Positional arguments (optional).
         :param kwargs: Keyword arguments for column lists and additional flags.
         """
-        float_columns = kwargs.get('float_columns', [])
-        int_columns = kwargs.get('int_columns', [])
-        date_columns = kwargs.get('date_columns', [])
-        bool_columns = kwargs.get('bool_columns', [])
-        is_datetime = kwargs.get('is_datetime', False)
+        float_columns: list = kwargs.get('float_columns', [])
+        int_columns: list = kwargs.get('int_columns', [])
+        date_columns: list = kwargs.get('date_columns', [])
+        bool_columns: list = kwargs.get('bool_columns', [])
+        is_datetime: bool = kwargs.get('is_datetime', False)
 
         for column in float_columns:
             data[column] = float(
