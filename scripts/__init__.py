@@ -89,7 +89,7 @@ def get_my_env_var(var_name: str) -> str:
 
 
 LOG_DIR_NAME: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
-LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.log"
+LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.json"
 
 
 def get_file_handler(name: str) -> logging.FileHandler:

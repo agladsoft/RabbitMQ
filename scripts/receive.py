@@ -29,9 +29,6 @@ DATE_FORMATS: tuple = (
     "%Y-%m-%d"
 )
 TZ: pytz.timezone = pytz.timezone("Europe/Moscow")
-MESSAGE_ERRORS: list = []
-UPLOAD_TABLES_DAY: set = set()
-UPLOAD_TABLES: set = set()
 
 
 def serialize_datetime(obj):
@@ -49,14 +46,36 @@ class Receive:
         )
         self.rabbit_mq = RabbitMQ()
         self.queue_name: Optional[str] = None
+        self.table_name: Optional[str] = None
+        self.processed_tables: set = set()
+        self.message_errors: list = []
 
-    def create_log_file(self):
-        current_time = datetime.now()
-        with open(LOG_FILE, 'w') as file:
-            file.write(
-                f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
-                f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}"
-            )
+    @staticmethod
+    def load_stats():
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
+            with open(LOG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+
+    @staticmethod
+    def save_stats(stats):
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(stats, f, ensure_ascii=False, indent=4)
+
+    def update_stats(self):
+        stats = self.load_stats()
+        today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if self.queue_name not in stats:
+            stats[self.queue_name] = {}
+
+        stats[self.queue_name] = {
+            "timestamp": today,
+            "count_message": self.count_message,
+            "processed_tables": list(self.processed_tables)
+        }
+
+        self.save_stats(stats)
 
     def check_and_update_log(
         self,
@@ -64,11 +83,11 @@ class Receive:
         required_time: time = time(hour=16, minute=58),
         time_sleep: int = 180
     ):
-        global UPLOAD_TABLES_DAY
         if current_time >= required_time and self.is_greater_time:
             self.logger.info("Created log file for writing count messages")
-            self.create_log_file()
-            UPLOAD_TABLES_DAY = set()
+            # self.create_log_file()
+            self.update_stats()
+            self.processed_tables = []
             self.count_message = 0
             self.is_greater_time = False
             time_.sleep(time_sleep)
@@ -78,24 +97,23 @@ class Receive:
             self.is_greater_time = True
         return False
 
-    def check_queue_empty(self):
-        global MESSAGE_ERRORS, UPLOAD_TABLES
-        message: str = f"Очередь '{self.queue_name}' пустая.\nЗагруженные таблицы - {UPLOAD_TABLES}.\n" \
-                       f"Количество ошибок - {len(MESSAGE_ERRORS)}.\nОшибки - {MESSAGE_ERRORS}"
+    def send_stats(self):
+        message: str = f"Очередь '{self.queue_name}' пустая.\nОбработанная таблица {self.table_name}.\n" \
+                       f"Количество ошибок - {len(self.message_errors)}.\nОшибки - {self.message_errors}"
         self.logger.info(message)
         max_len_message: int = 4090
         if len(message) >= max_len_message:
             message = message[:max_len_message]
-        self.create_log_file()
+        # self.create_log_file()
+        self.update_stats()
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
             "text": message,
             "reply_to_message_id": get_my_env_var('MESSAGE_ID')
         }
-        url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
-        UPLOAD_TABLES = set()
-        if MESSAGE_ERRORS:
-            MESSAGE_ERRORS = []
+        if self.message_errors:
+            self.message_errors = []
+            url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
             response = requests.get(url, params=params)
             response.raise_for_status()
             return response
@@ -120,12 +138,11 @@ class Receive:
         if data_core:
             data_core.handle_rows(all_data, data, key_deals)
         else:
-            MESSAGE_ERRORS.append(key_deals)
+            self.message_errors.append(key_deals)
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
             data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
         self.logger.info("Callback exit. The data from the queue was processed by the script")
-        # self.check_queue_empty()
 
     def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
         file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
@@ -148,12 +165,10 @@ class Receive:
             self.logger.error(
                 f"An error was received when converting data types. Table is {eng_table_name}. Exception is {ex}"
             )
-            MESSAGE_ERRORS.append(key_deals)
+            self.message_errors.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
-            raise AssertionError(
-                "Stop consuming because receive an error where converting data types"
-            ) from ex
+            raise AssertionError("Stop consuming because receive an error where converting data types") from ex
         if data:
             list_columns_rabbit: list = list(data[0].keys())
             if _ := data_core.check_difference_columns(
@@ -177,8 +192,8 @@ class Receive:
     def read_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
         all_data, rus_table_name, key_deals = self.read_msg(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
-        UPLOAD_TABLES.add(eng_table_name)
-        UPLOAD_TABLES_DAY.add(eng_table_name)
+        self.table_name = eng_table_name
+        self.processed_tables.add(eng_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
@@ -187,8 +202,8 @@ class Receive:
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
-        UPLOAD_TABLES.add(rus_table_name)
-        UPLOAD_TABLES_DAY.add(rus_table_name)
+        self.table_name = rus_table_name
+        self.processed_tables.add(rus_table_name)
         self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
         return all_data, data, None, data_core, key_deals
 
@@ -214,7 +229,8 @@ class Receive:
 class DataCoreClient(Receive):
     def __init__(self):
         super().__init__()
-        self.client: Client = self.connect_to_db()
+        self.client: Optional[Client] = None
+        self.client = self.connect_to_db()
         self.removed_columns_db = ['uuid']
         self._original_date_string: Optional[str] = None
 
@@ -314,13 +330,15 @@ class DataCoreClient(Receive):
         if diff_db or diff_rabbit:
             self.logger.error(f"The difference in columns {diff_db} from the database. "
                               f"The difference in columns {diff_rabbit} from the rabbit")
-            MESSAGE_ERRORS.append(key_deals)
+            self.message_errors.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
             return diff_db + diff_rabbit
         return []
 
     def connect_to_db(self) -> Client:
+        if self.client:
+            return self.client
         try:
             client: Client = get_client(
                 host=get_my_env_var('HOST'),
@@ -377,7 +395,7 @@ class DataCoreClient(Receive):
             # self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            MESSAGE_ERRORS.append(key_deals)
+            self.message_errors.append(key_deals)
             self.write_to_json(all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
@@ -1202,7 +1220,7 @@ if __name__ == '__main__':
                     )
 
                     if method_frame is None or method_frame.NAME == 'Basic.GetEmpty':
-                        receive.check_queue_empty()
+                        receive.send_stats()
                         break  # Очередь пуста, переходим к следующей
 
                     any_messages = True  # Были сообщения, значит не засыпаем
@@ -1215,11 +1233,11 @@ if __name__ == '__main__':
                     except Exception as e:
                         receive.logger.error(f"Ошибка обработки: {e}")
                         tuple_msg = receive.read_msg(body_)
-                        MESSAGE_ERRORS.append(tuple_msg[2])
+                        receive.message_errors.append(tuple_msg[2])
                         receive.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
 
             if not any_messages:
-                time_.sleep(1)  # Если все очереди пустые, ждем 1 сек перед новым циклом
+                time_.sleep(360)  # Если все очереди пустые, ждем 1 сек перед новым циклом
 
     except Exception as ex_:
         receive.logger.error(f"Error: {ex_}")
