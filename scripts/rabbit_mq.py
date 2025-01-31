@@ -9,15 +9,21 @@ class RabbitMQ:
         self.host = get_my_env_var('RABBITMQ_HOST')
         self.port = int(get_my_env_var('RABBITMQ_PORT'))
         self.exchange_name = get_my_env_var('EXCHANGE_NAME')
-        self.connection = None
-        self.channel = None
-        self.connect()
+        self.connection, self.channel = self.connect()
 
     def connect(self):
         credentials = pika.PlainCredentials(self.user, self.password)
-        parameters = pika.ConnectionParameters(host=self.host, port=self.port, credentials=credentials)
-        self.connection = pika.BlockingConnection(parameters)
-        self.channel = self.connection.channel()
+        parameters = pika.ConnectionParameters(
+            host=self.host,
+            port=self.port,
+            credentials=credentials,
+            heartbeat=600,
+            connection_attempts=5,
+            blocked_connection_timeout=300,
+            retry_delay=3
+        )
+        connection = pika.BlockingConnection(parameters)
+        return connection, connection.channel()
 
     def close(self):
         if self.connection and not self.connection.is_closed:

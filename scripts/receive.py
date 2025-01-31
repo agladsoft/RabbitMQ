@@ -39,16 +39,32 @@ def serialize_datetime(obj):
 
 class Receive:
     def __init__(self):
-        self.count_message: int = 0
-        self.is_greater_time: bool = False
         self.logger: logging.getLogger = get_logger(
             os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
         )
         self.rabbit_mq = RabbitMQ()
+        self.client: Optional[Client] = None
+        self.connect_to_db()
+        self.count_message: int = 0
+        self.is_greater_time: bool = False
         self.queue_name: Optional[str] = None
         self.table_name: Optional[str] = None
-        self.processed_tables: set = set()
         self.message_errors: list = []
+
+    def connect_to_db(self) -> None:
+        try:
+            client: Client = get_client(
+                host=get_my_env_var('HOST'),
+                database=get_my_env_var('DATABASE'),
+                username=get_my_env_var('USERNAME_DB'),
+                password=get_my_env_var('PASSWORD')
+            )
+            client.query("SET allow_experimental_lightweight_delete=1")
+            self.logger.info("Success connect to clickhouse")
+            self.client = client
+        except Exception as ex_connect:
+            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            raise ConnectionError from ex_connect
 
     @staticmethod
     def load_stats():
@@ -65,15 +81,16 @@ class Receive:
     def update_stats(self):
         stats = self.load_stats()
         today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         if self.queue_name not in stats:
-            stats[self.queue_name] = {}
+            stats[self.queue_name] = {
+                "timestamp": today,
+                "count_message": 0,
+                "processed_table": None
+            }
 
-        stats[self.queue_name] = {
-            "timestamp": today,
-            "count_message": self.count_message,
-            "processed_tables": list(self.processed_tables)
-        }
+        stats[self.queue_name]["count_message"] += self.count_message
+        stats[self.queue_name]["processed_table"] = self.table_name
+        stats[self.queue_name]["timestamp"] = today
 
         self.save_stats(stats)
 
@@ -85,10 +102,9 @@ class Receive:
     ):
         if current_time >= required_time and self.is_greater_time:
             self.logger.info("Created log file for writing count messages")
-            # self.create_log_file()
             self.update_stats()
-            self.processed_tables = []
             self.count_message = 0
+            self.table_name = None
             self.is_greater_time = False
             time_.sleep(time_sleep)
             return True
@@ -104,8 +120,8 @@ class Receive:
         max_len_message: int = 4090
         if len(message) >= max_len_message:
             message = message[:max_len_message]
-        # self.create_log_file()
-        self.update_stats()
+        if self.count_message > 0:
+            self.update_stats()
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
             "text": message,
@@ -141,7 +157,7 @@ class Receive:
             self.message_errors.append(key_deals)
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
-            data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
+            data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
     def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
@@ -193,22 +209,21 @@ class Receive:
         all_data, rus_table_name, key_deals = self.read_msg(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
-        self.processed_tables.add(eng_table_name)
         data: list = copy.deepcopy(all_data).get("data", [])
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
-            data_core: Any = data_core()
+            data_core: Any = data_core(self)
             file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         self.table_name = rus_table_name
-        self.processed_tables.add(rus_table_name)
         self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
         return all_data, data, None, data_core, key_deals
 
     def write_to_json(
-        self, msg: dict,
+        self,
+        msg: dict,
         eng_table_name: str,
         dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
     ) -> str:
@@ -225,18 +240,51 @@ class Receive:
 
         return file_name
 
+    def main(self):
+        try:
+            for queue_name, routing_key_name in QUEUES_AND_ROUTING_KEYS.items():
+                self.rabbit_mq.channel.queue_bind(
+                    exchange=self.rabbit_mq.exchange_name,
+                    queue=queue_name,
+                    routing_key=routing_key_name
+                )
+            while True:
+                for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):  # Убираем дублирующиеся очереди
+                    self.queue_name = queue_name
+                    self.count_message = 0
+                    while True:  # Читаем все сообщения из одной очереди
+                        method_frame, header_frame, body_ = self.rabbit_mq.channel.basic_get(
+                            queue=queue_name,
+                            auto_ack=False
+                        )
+                        if method_frame is None or method_frame.NAME == 'Basic.GetEmpty':
+                            self.send_stats()
+                            break  # Очередь пуста, переходим к следующей
 
-class DataCoreClient(Receive):
-    def __init__(self):
-        super().__init__()
-        self.client: Optional[Client] = None
-        self.client = self.connect_to_db()
+                        self.logger.info(f"Got message with queue_name: {queue_name}")
+                        try:
+                            self.callback(self.rabbit_mq.channel, method_frame, header_frame, body_)
+                            self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                        except Exception as e:
+                            self.logger.error(f"Ошибка обработки: {e}")
+                            self.message_errors.append(self.read_msg(body_)[2])
+                            self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                time_.sleep(30)
+        except Exception as ex_:
+            self.logger.error(f"Error: {ex_}")
+        finally:
+            self.rabbit_mq.close()
+
+
+class DataCoreClient:
+    def __init__(self, receive):
+        self.receive = receive
         self.removed_columns_db = ['uuid']
         self._original_date_string: Optional[str] = None
 
     @property
     def database(self):
-        return self.client.database
+        return self.receive.client.database
 
     @property
     def table(self):
@@ -328,33 +376,20 @@ class DataCoreClient(Receive):
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
         diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
         if diff_db or diff_rabbit:
-            self.logger.error(f"The difference in columns {diff_db} from the database. "
-                              f"The difference in columns {diff_rabbit} from the rabbit")
-            self.message_errors.append(key_deals)
-            self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
+            self.receive.logger.error(
+                f"The difference in columns {diff_db} from the database. "
+                f"The difference in columns {diff_rabbit} from the rabbit"
+            )
+            self.receive.message_errors.append(key_deals)
+            self.receive.write_to_json(
+                all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
+            )
             self.insert_message(all_data, key_deals, is_success_inserted=False)
             return diff_db + diff_rabbit
         return []
 
-    def connect_to_db(self) -> Client:
-        if self.client:
-            return self.client
-        try:
-            client: Client = get_client(
-                host=get_my_env_var('HOST'),
-                database=get_my_env_var('DATABASE'),
-                username=get_my_env_var('USERNAME_DB'),
-                password=get_my_env_var('PASSWORD')
-            )
-            client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connect to clickhouse")
-        except Exception as ex_connect:
-            self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            raise ConnectionError from ex_connect
-        return client
-
     def get_table_columns(self):
-        described_table = self.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
+        described_table = self.receive.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
         return described_table.result_columns[0]
 
     def insert_message(self, all_data: dict, key_deals: str, is_success_inserted: bool):
@@ -363,14 +398,14 @@ class DataCoreClient(Receive):
         rows = [[
             self.database,
             self.table,
-            self.queue_name,
+            self.receive.queue_name,
             key_deals,
             datetime.now(tz=TZ) + timedelta(hours=3),
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]]
         columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.client.insert(
+        self.receive.client.insert(
             table=LOG_TABLE,
             database="DataCore",
             data=rows,
@@ -391,12 +426,14 @@ class DataCoreClient(Receive):
                 #     column_names=columns,
                 #     settings={"async_insert": 1, "wait_for_async_insert": 1}
                 # )
-                self.logger.info("The data has been uploaded to the database")
+                self.receive.logger.info("The data has been uploaded to the database")
             # self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
-            self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            self.message_errors.append(key_deals)
-            self.write_to_json(all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
+            self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
+            self.receive.message_errors.append(key_deals)
+            self.receive.write_to_json(
+                all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
+            )
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
     def update_status(self, key_deals: str) -> None:
@@ -406,7 +443,7 @@ class DataCoreClient(Receive):
             f"GROUP BY uuid HAVING SUM(sign) > 0"
             f")"
         )
-        selected_query = self.client.query(query)
+        selected_query = self.receive.client.query(query)
         if rows_query := selected_query.result_rows:
             list_rows = [
                 {column: -1 if column == 'sign' else value
@@ -415,31 +452,31 @@ class DataCoreClient(Receive):
             ]
             rows = [list(row.values()) for row in list_rows]
             columns = list(list_rows[0].keys())
-            self.client.insert(
+            self.receive.client.insert(
                 table=self.table,
                 database=self.database,
                 data=rows,
                 column_names=columns,
                 settings={"async_insert": 1, "wait_for_async_insert": 1}
             )
-        self.logger.info("Data processing in the database is completed")
+        self.receive.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
-        self.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
-        self.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
+        self.receive.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
+        self.receive.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
 
     def __exit__(self, exception_type, exception_val, trace):
         try:
-            self.client.close()
-            self.logger.info("Success disconnect clickhouse")
+            self.receive.client.close()
+            self.receive.logger.info("Success disconnect clickhouse")
         except AttributeError:  # isn't closable
-            self.logger.info("Not closable")
+            self.receive.logger.info("Not closable")
             return True
 
 
 class DataCoreFreight(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -468,8 +505,8 @@ class DataCoreFreight(DataCoreClient):
 
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -495,8 +532,8 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
 
 
 class CounterParties(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -508,8 +545,8 @@ class CounterParties(DataCoreClient):
 
 
 class OrdersReport(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -535,8 +572,8 @@ class OrdersReport(DataCoreClient):
 
 
 class AutoPickupGeneralReport(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -570,8 +607,8 @@ class AutoPickupGeneralReport(DataCoreClient):
 
 
 class TransportUnits(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -583,8 +620,8 @@ class TransportUnits(DataCoreClient):
 
 
 class Consignments(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -610,8 +647,8 @@ class Consignments(DataCoreClient):
 
 
 class SalesPlan(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -633,8 +670,8 @@ class SalesPlan(DataCoreClient):
 
 
 class NaturalIndicatorsTransactionFactDate(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -663,8 +700,8 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
 
 
 class DevelopmentCounterpartyDepartment(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -686,8 +723,8 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
 
 
 class ExportBookings(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -713,8 +750,8 @@ class ExportBookings(DataCoreClient):
 
 
 class ImportBookings(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -740,8 +777,8 @@ class ImportBookings(DataCoreClient):
 
 
 class CompletedRepackagesReport(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -770,8 +807,8 @@ class CompletedRepackagesReport(DataCoreClient):
 
 
 class AutoVisits(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -797,8 +834,8 @@ class AutoVisits(DataCoreClient):
 
 
 class AccountingDocumentsRequests(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -824,8 +861,8 @@ class AccountingDocumentsRequests(DataCoreClient):
 
 
 class DailySummary(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -851,8 +888,8 @@ class DailySummary(DataCoreClient):
 
 
 class RZHDOperationsReport(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -878,8 +915,8 @@ class RZHDOperationsReport(DataCoreClient):
 
 
 class OrdersMarginalityReport(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -909,8 +946,8 @@ class OrdersMarginalityReport(DataCoreClient):
 
 
 class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -936,8 +973,8 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
 
 
 class Accounts(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -963,8 +1000,8 @@ class Accounts(DataCoreClient):
 
 
 class FreightRates(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -990,8 +1027,8 @@ class FreightRates(DataCoreClient):
 
 
 class MarginalityOrdersActDate(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -1021,8 +1058,8 @@ class MarginalityOrdersActDate(DataCoreClient):
 
 
 class RusconProducts(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -1051,8 +1088,8 @@ class RusconProducts(DataCoreClient):
 
 
 class ReferenceLocations(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -1074,8 +1111,8 @@ class ReferenceLocations(DataCoreClient):
 
 
 class TerminalsCapacity(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def table(self):
@@ -1101,8 +1138,8 @@ class TerminalsCapacity(DataCoreClient):
 
 
 class ManagerEvaluation(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def database(self):
@@ -1132,8 +1169,8 @@ class ManagerEvaluation(DataCoreClient):
 
 
 class ReferenceCounterparties(DataCoreClient):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, receive: Receive):
+        super().__init__(receive=receive)
 
     @property
     def database(self):
@@ -1195,51 +1232,4 @@ CLASSES: list = [
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    receive = Receive()
-    receive.rabbit_mq.connect()
-
-    try:
-        # Привязываем каждую очередь к соответствующему routing_key один раз
-        for queue_name, routing_key_name in QUEUES_AND_ROUTING_KEYS.items():
-            receive.rabbit_mq.channel.queue_bind(
-                exchange=receive.rabbit_mq.exchange_name,
-                queue=queue_name,
-                routing_key=routing_key_name
-            )
-
-        while True:
-            any_messages = False  # Флаг, были ли сообщения в текущем проходе
-
-            for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):  # Убираем дублирующиеся очереди
-                receive.queue_name = queue_name
-
-                while True:  # Читаем все сообщения из одной очереди
-                    method_frame, header_frame, body_ = receive.rabbit_mq.channel.basic_get(
-                        queue=queue_name,
-                        auto_ack=False
-                    )
-
-                    if method_frame is None or method_frame.NAME == 'Basic.GetEmpty':
-                        receive.send_stats()
-                        break  # Очередь пуста, переходим к следующей
-
-                    any_messages = True  # Были сообщения, значит не засыпаем
-                    routing_key = method_frame.routing_key  # Получаем реальный routing_key из сообщения
-                    receive.logger.info(f"Got message with queue_name: {queue_name}, routing_key: {routing_key}")
-
-                    try:
-                        receive.callback(receive.rabbit_mq.channel, method_frame, header_frame, body_)
-                        receive.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-                    except Exception as e:
-                        receive.logger.error(f"Ошибка обработки: {e}")
-                        tuple_msg = receive.read_msg(body_)
-                        receive.message_errors.append(tuple_msg[2])
-                        receive.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
-
-            if not any_messages:
-                time_.sleep(360)  # Если все очереди пустые, ждем 1 сек перед новым циклом
-
-    except Exception as ex_:
-        receive.logger.error(f"Error: {ex_}")
-    finally:
-        receive.rabbit_mq.close()
+    Receive().main()
