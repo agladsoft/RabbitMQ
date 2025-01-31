@@ -136,9 +136,7 @@ def receive_instance(mock_main):
     :param mock_main: An instance of class Receive
     :return:
     """
-    obj = Receive()
-    obj.main()
-    return obj
+    return Receive()
 
 
 @pytest.fixture

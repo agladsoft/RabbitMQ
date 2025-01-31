@@ -7,6 +7,10 @@ load_dotenv()
 
 LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
+QUEUES_AND_ROUTING_KEYS: dict = {
+    "DC_TEST_Q": "DC_TEST_RT",
+    "DC_TEST_Q2": "DC_TEST_RT2"
+}
 
 TABLE_NAMES: dict = {
     # Данные по DC

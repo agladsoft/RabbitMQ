@@ -9,7 +9,7 @@ from pathlib import Path
 from pika.spec import Basic
 from scripts.__init__ import *
 from pika import BasicProperties
-from scripts.rabbit_mq import RabbitMq
+from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
@@ -40,41 +40,23 @@ def serialize_datetime(obj):
     raise TypeError("Type not serializable")
 
 
-class Receive(RabbitMq):
+class Receive:
     def __init__(self):
-        super().__init__()
-        self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                    + str(datetime.now(tz=TZ).date()))
         self.count_message: int = 0
         self.is_greater_time: bool = False
-
-    def main(self) -> None:
-        """
-        Connecting to a queue and receiving messages
-        :return:
-        """
-        self.logger.info('The script has started working')
-        self.read_text_msg(do_read_file=eval(get_my_env_var('DO_READ_FILE')))
-        self.connect_rabbit()
-        self.logger.info('Success connect to RabbitMQ')
-        self.channel.exchange_declare(exchange=self.exchange, exchange_type='direct', durable=self.durable)
-        self.channel.queue_declare(queue=self.queue_name, durable=self.durable)
-        self.channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key=self.routing_key)
-        self.channel.basic_qos(prefetch_count=1)
-        self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback, auto_ack=False)
-        self.logger.info("Start consuming")
-        self.channel.start_consuming()
-        self.logger.info('The script has completed working')
+        self.logger: logging.getLogger = get_logger(
+            os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
+        )
+        self.rabbit_mq = RabbitMQ()
+        self.queue_name: Optional[str] = None
 
     def create_log_file(self):
-        """
-
-        :return:
-        """
         current_time = datetime.now()
         with open(LOG_FILE, 'w') as file:
-            file.write(f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
-                       f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}")
+            file.write(
+                f"Очередь '{self.queue_name}'.\nКоличество сообщений на {current_time}: {self.count_message}\n"
+                f"Загруженные таблицы на {current_time}: {UPLOAD_TABLES_DAY}"
+            )
 
     def check_and_update_log(
         self,
@@ -97,50 +79,26 @@ class Receive(RabbitMq):
         return False
 
     def check_queue_empty(self):
-        """
-        Checking the number of messages in the queue
-        :return:
-        """
         global MESSAGE_ERRORS, UPLOAD_TABLES
-        method_frame, header_frame, body = self.channel.basic_get(self.queue_name)
-        if method_frame is None:
-            message: str = f"Очередь '{self.queue_name}' пустая.\nЗагруженные таблицы - {UPLOAD_TABLES}.\n" \
-                           f"Количество ошибок - {len(MESSAGE_ERRORS)}.\nОшибки - {MESSAGE_ERRORS}"
-            self.logger.info(message)
-            max_len_message: int = 4090
-            if len(message) >= max_len_message:
-                message = message[:max_len_message]
-            self.create_log_file()
-            params: dict = {
-                "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
-                "text": message,
-                "reply_to_message_id": get_my_env_var('MESSAGE_ID')
-            }
-            url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
-            UPLOAD_TABLES = set()
-            if MESSAGE_ERRORS:
-                MESSAGE_ERRORS = []
-                response = requests.get(url, params=params)
-                response.raise_for_status()
-                return response
-        else:
-            self.channel.basic_nack(method_frame.delivery_tag)
-
-    def read_text_msg(self, do_read_file: bool = False) -> None:
-        """
-
-        :param do_read_file:
-        :return:
-        """
-        if do_read_file:
-            with open(f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/msg/"
-                      f"{get_my_env_var('FILE_NAME')}", 'r') as file:
-                self.callback(
-                    ch='',
-                    method='',
-                    properties='',
-                    body=json.loads(file.read().encode().decode('utf-8-sig'))
-                )
+        message: str = f"Очередь '{self.queue_name}' пустая.\nЗагруженные таблицы - {UPLOAD_TABLES}.\n" \
+                       f"Количество ошибок - {len(MESSAGE_ERRORS)}.\nОшибки - {MESSAGE_ERRORS}"
+        self.logger.info(message)
+        max_len_message: int = 4090
+        if len(message) >= max_len_message:
+            message = message[:max_len_message]
+        self.create_log_file()
+        params: dict = {
+            "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
+            "text": message,
+            "reply_to_message_id": get_my_env_var('MESSAGE_ID')
+        }
+        url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+        UPLOAD_TABLES = set()
+        if MESSAGE_ERRORS:
+            MESSAGE_ERRORS = []
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return response
 
     def callback(
         self,
@@ -149,52 +107,27 @@ class Receive(RabbitMq):
         properties: Union[BasicProperties, str],
         body: Union[bytes, str]
     ) -> None:
-        """
-        Working with the message body
-        :param ch:
-        :param method:
-        :param properties:
-        :param body:
-        :return:
-        """
-        try:
-            self.check_and_update_log()
-            self.count_message += 1
-            self.logger: logging.getLogger = get_logger(os.path.basename(__file__).replace(".py", "_")
-                                                        + str(datetime.now(tz=TZ).date()))
-            self.logger.info(f"Callback start for ch={ch}, method={method}, properties={properties}, "
-                             f"body_message called. Count messages is {self.count_message}")
-            all_data, data, file_name, data_core, key_deals = self.read_json(body)
-            if data_core:
-                data_core.handle_rows(all_data, data, key_deals)
-            else:
-                MESSAGE_ERRORS.append(key_deals)
-                data_core_client = DataCoreClient
-                data_core_client.table = all_data.get("header", {}).get("report")
-                data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
-            self.logger.info("Callback exit. The data from the queue was processed by the script")
-        except AssertionError:
-            pass
-        except ConnectionError as ex:
-            self.logger.error(f"ConnectionError is {ex}")
-            all_data, rus_table_name, key_deals = self.read_msg(body)
+        self.check_and_update_log()
+        self.count_message += 1
+        self.logger: logging.getLogger = get_logger(
+            os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
+        )
+        self.logger.info(
+            f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
+            f"Count messages is {self.count_message}"
+        )
+        all_data, data, file_name, data_core, key_deals = self.read_json(body)
+        if data_core:
+            data_core.handle_rows(all_data, data, key_deals)
+        else:
             MESSAGE_ERRORS.append(key_deals)
-            self.write_to_json(all_data, "unknown", dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
-        finally:
-            self.check_queue_empty()
-            delivery_tag = None if isinstance(method, str) else method.delivery_tag
-            self.channel.basic_ack(delivery_tag=delivery_tag) if delivery_tag else None
+            data_core_client = DataCoreClient
+            data_core_client.table = all_data.get("header", {}).get("report")
+            data_core_client().insert_message(all_data, key_deals, is_success_inserted=False)
+        self.logger.info("Callback exit. The data from the queue was processed by the script")
+        # self.check_queue_empty()
 
     def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
-        """
-
-        :param all_data:
-        :param data:
-        :param data_core:
-        :param eng_table_name:
-        :param key_deals:
-        :return:
-        """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
         self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
         list_columns_db: list = data_core.get_table_columns()
@@ -212,8 +145,9 @@ class Receive(RabbitMq):
                     data[i][original_date_string] = data[i][original_date_string].strip() \
                         if data[i][original_date_string] else None
         except Exception as ex:
-            self.logger.error(f"An error was received when converting data types. "
-                              f"Table is {eng_table_name}. Exception is {ex}")
+            self.logger.error(
+                f"An error was received when converting data types. Table is {eng_table_name}. Exception is {ex}"
+            )
             MESSAGE_ERRORS.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
@@ -241,11 +175,6 @@ class Receive(RabbitMq):
         return all_data, rus_table_name, key_deals
 
     def read_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
-        """
-        Decoding a message and working with data.
-        :param msg:
-        :return:
-        """
         all_data, rus_table_name, key_deals = self.read_msg(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         UPLOAD_TABLES.add(eng_table_name)
@@ -268,13 +197,6 @@ class Receive(RabbitMq):
         eng_table_name: str,
         dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
     ) -> str:
-        """
-        Write data to json file
-        :param msg:
-        :param eng_table_name:
-        :param dir_name:
-        :return:
-        """
         self.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
 
         file_name: str = f"{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}.json"
@@ -353,9 +275,6 @@ class DataCoreClient(Receive):
                 data[column] = data.get(column).upper() == 'ДА'
 
     def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> Union[datetime, str]:
-        """
-        Convert to a date type.
-        """
         for date_format in DATE_FORMATS:
             with contextlib.suppress(ValueError):
                 if not is_datetime:
@@ -372,13 +291,6 @@ class DataCoreClient(Receive):
 
     @staticmethod
     def add_new_columns(data: dict, file_name: str, original_date_string: str) -> None:
-        """
-        Adding new columns.
-        :param data:
-        :param file_name:
-        :param original_date_string:
-        :return:
-        """
         data['sign'] = 1
         data['original_file_parsed_on'] = file_name
         data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
@@ -387,11 +299,6 @@ class DataCoreClient(Receive):
 
     @staticmethod
     def convert_to_lowercase(data: dict):
-        """
-        Convert keys of columns to lowercase text.
-        :param data:
-        :return:
-        """
         return {k.lower(): v for k, v in data.items()}
 
     def check_difference_columns(
@@ -402,15 +309,6 @@ class DataCoreClient(Receive):
         list_columns_rabbit: list,
         key_deals: str
     ) -> list:
-        """
-
-        :param all_data:
-        :param eng_table_name:
-        :param list_columns_db:
-        :param list_columns_rabbit:
-        :param key_deals:
-        :return:
-        """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
         diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
         if diff_db or diff_rabbit:
@@ -423,13 +321,13 @@ class DataCoreClient(Receive):
         return []
 
     def connect_to_db(self) -> Client:
-        """
-        Connecting to clickhouse.
-        :return: Client ClickHouse.
-        """
         try:
-            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
-                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
+            client: Client = get_client(
+                host=get_my_env_var('HOST'),
+                database=get_my_env_var('DATABASE'),
+                username=get_my_env_var('USERNAME_DB'),
+                password=get_my_env_var('PASSWORD')
+            )
             client.query("SET allow_experimental_lightweight_delete=1")
             self.logger.info("Success connect to clickhouse")
         except Exception as ex_connect:
@@ -438,21 +336,10 @@ class DataCoreClient(Receive):
         return client
 
     def get_table_columns(self):
-        """
-
-        :return:
-        """
         described_table = self.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
         return described_table.result_columns[0]
 
     def insert_message(self, all_data: dict, key_deals: str, is_success_inserted: bool):
-        """
-
-        :param all_data:
-        :param key_deals:
-        :param is_success_inserted:
-        :return:
-        """
         len_data: int = 100
         all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
         rows = [[
@@ -474,27 +361,20 @@ class DataCoreClient(Receive):
         )
 
     def handle_rows(self, all_data, data: list, key_deals: str) -> None:
-        """
-        Counting the number of rows to update transaction data.
-        :param all_data:
-        :param data:
-        :param key_deals:
-        :return:
-        """
         try:
-            self.update_status(key_deals)
+            # self.update_status(key_deals)
             rows = [list(row.values()) for row in data] if data else [[]]
             columns = list(data[0]) if data else []
             if rows and columns:
-                self.client.insert(
-                    table=self.table,
-                    database=self.database,
-                    data=rows,
-                    column_names=columns,
-                    settings={"async_insert": 1, "wait_for_async_insert": 1}
-                )
+                # self.client.insert(
+                #     table=self.table,
+                #     database=self.database,
+                #     data=rows,
+                #     column_names=columns,
+                #     settings={"async_insert": 1, "wait_for_async_insert": 1}
+                # )
                 self.logger.info("The data has been uploaded to the database")
-            self.insert_message(all_data, key_deals, is_success_inserted=True)
+            # self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             MESSAGE_ERRORS.append(key_deals)
@@ -502,10 +382,6 @@ class DataCoreClient(Receive):
             self.insert_message(all_data, key_deals, is_success_inserted=False)
 
     def update_status(self, key_deals: str) -> None:
-        """
-        Updating the transaction by parameters.
-        :return:
-        """
         query = (
             f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
             f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} = '{key_deals}' "
@@ -531,10 +407,6 @@ class DataCoreClient(Receive):
         self.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
-        """
-        Deleting an is_obsolete key transaction.
-        :return:
-        """
         self.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
         self.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
 
@@ -564,14 +436,7 @@ class DataCoreFreight(DataCoreClient):
         return "original_voyage_month_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         data: dict = kwargs.get('data')
-
         super().change_columns(
             data=data,
             float_columns=kwargs.get('float_columns', []),
@@ -601,12 +466,6 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
         return "original_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -647,12 +506,6 @@ class OrdersReport(DataCoreClient):
         return "original_voyage_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -680,12 +533,6 @@ class AutoPickupGeneralReport(DataCoreClient):
         return "original_date_delivery_plan_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=[
@@ -734,12 +581,6 @@ class Consignments(DataCoreClient):
         return "original_voyage_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -763,12 +604,6 @@ class SalesPlan(DataCoreClient):
         return "key_id"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -796,12 +631,6 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
         return "original_operation_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -828,12 +657,6 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
         return "key_id"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -861,12 +684,6 @@ class ExportBookings(DataCoreClient):
         return "original_booking_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -894,12 +711,6 @@ class ImportBookings(DataCoreClient):
         return "original_booking_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -927,12 +738,6 @@ class CompletedRepackagesReport(DataCoreClient):
         return "original_repacking_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -963,12 +768,6 @@ class AutoVisits(DataCoreClient):
         return "original_entry_datetime_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -996,12 +795,6 @@ class AccountingDocumentsRequests(DataCoreClient):
         return "original_request_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1029,12 +822,6 @@ class DailySummary(DataCoreClient):
         return "original_motion_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=['tonnage', 'cargo_weight'],
@@ -1062,12 +849,6 @@ class RZHDOperationsReport(DataCoreClient):
         return "original_operation_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1095,12 +876,6 @@ class OrdersMarginalityReport(DataCoreClient):
         return "original_order_creation_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=[
@@ -1132,12 +907,6 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
         return "original_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1165,12 +934,6 @@ class Accounts(DataCoreClient):
         return "original_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=['profit_account_rub', 'profit_account'],
@@ -1198,12 +961,6 @@ class FreightRates(DataCoreClient):
         return "original_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=['rate'],
@@ -1231,12 +988,6 @@ class MarginalityOrdersActDate(DataCoreClient):
         return "original_act_creation_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=[
@@ -1268,12 +1019,6 @@ class RusconProducts(DataCoreClient):
         return "original_kp_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=[
@@ -1300,12 +1045,6 @@ class ReferenceLocations(DataCoreClient):
         return "key_id"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=['lat_port', 'long_port'],
@@ -1333,12 +1072,6 @@ class TerminalsCapacity(DataCoreClient):
         return "original_date_string"
 
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1370,12 +1103,6 @@ class ManagerEvaluation(DataCoreClient):
         return "original_date_string"
     
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1401,14 +1128,8 @@ class ReferenceCounterparties(DataCoreClient):
     @property
     def deal(self):
         return "key_id"
-    
+
     def change_columns(self, *args, **kwargs) -> None:
-        """
-        Changes columns in data.
-        :param args:
-        :param kwargs:
-        :return:
-        """
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
@@ -1456,4 +1177,51 @@ CLASSES: list = [
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    Receive().main()
+    receive = Receive()
+    receive.rabbit_mq.connect()
+
+    try:
+        # Привязываем каждую очередь к соответствующему routing_key один раз
+        for queue_name, routing_key_name in QUEUES_AND_ROUTING_KEYS.items():
+            receive.rabbit_mq.channel.queue_bind(
+                exchange=receive.rabbit_mq.exchange_name,
+                queue=queue_name,
+                routing_key=routing_key_name
+            )
+
+        while True:
+            any_messages = False  # Флаг, были ли сообщения в текущем проходе
+
+            for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):  # Убираем дублирующиеся очереди
+                receive.queue_name = queue_name
+
+                while True:  # Читаем все сообщения из одной очереди
+                    method_frame, header_frame, body_ = receive.rabbit_mq.channel.basic_get(
+                        queue=queue_name,
+                        auto_ack=False
+                    )
+
+                    if method_frame is None or method_frame.NAME == 'Basic.GetEmpty':
+                        receive.check_queue_empty()
+                        break  # Очередь пуста, переходим к следующей
+
+                    any_messages = True  # Были сообщения, значит не засыпаем
+                    routing_key = method_frame.routing_key  # Получаем реальный routing_key из сообщения
+                    receive.logger.info(f"Got message with queue_name: {queue_name}, routing_key: {routing_key}")
+
+                    try:
+                        receive.callback(receive.rabbit_mq.channel, method_frame, header_frame, body_)
+                        receive.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    except Exception as e:
+                        receive.logger.error(f"Ошибка обработки: {e}")
+                        tuple_msg = receive.read_msg(body_)
+                        MESSAGE_ERRORS.append(tuple_msg[2])
+                        receive.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+
+            if not any_messages:
+                time_.sleep(1)  # Если все очереди пустые, ждем 1 сек перед новым циклом
+
+    except Exception as ex_:
+        receive.logger.error(f"Error: {ex_}")
+    finally:
+        receive.rabbit_mq.close()

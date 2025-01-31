@@ -1,32 +1,48 @@
 import pika
-from typing import Optional
 from scripts.__init__ import get_my_env_var
-from pika.adapters.blocking_connection import BlockingChannel
 
 
-class RabbitMq:
+class RabbitMQ:
     def __init__(self):
-        self.user = 'rabbitmq'
-        self.host = '10.23.4.199'
-        self.password = '8KZ3wXA5W2rP'
-        self.exchange = get_my_env_var('EXCHANGE')
-        self.routing_key = get_my_env_var('ROUTING_KEY')
-        self.durable = True
-        self.queue_name = get_my_env_var('QUEUE_NAME')
-        self.channel: Optional[BlockingChannel] = None
+        self.user = get_my_env_var('RABBITMQ_USER')
+        self.password = get_my_env_var('RABBITMQ_PASSWORD')
+        self.host = get_my_env_var('RABBITMQ_HOST')
+        self.port = int(get_my_env_var('RABBITMQ_PORT'))
+        self.exchange_name = get_my_env_var('EXCHANGE_NAME')
+        self.connection = None
+        self.channel = None
+        self.connect()
 
-    def connect_rabbit(self):
+    def connect(self):
         credentials = pika.PlainCredentials(self.user, self.password)
-        parameters = pika.ConnectionParameters(
-            host=self.host,
-            port=5672,
-            virtual_host='/',
-            credentials=credentials,
-            heartbeat=600,
-            connection_attempts=5,
-            blocked_connection_timeout=300,
-            retry_delay=3
+        parameters = pika.ConnectionParameters(host=self.host, port=self.port, credentials=credentials)
+        self.connection = pika.BlockingConnection(parameters)
+        self.channel = self.connection.channel()
+
+    def close(self):
+        if self.connection and not self.connection.is_closed:
+            self.connection.close()
+
+    def consume(self, queue_name, callback):
+        if not self.channel:
+            raise ConnectionError("Connection is not established.")
+        self.channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+        self.channel.start_consuming()
+
+    def get(self, queue_name):
+        if not self.channel:
+            raise ConnectionError("Connection is not established.")
+        method_frame, header_frame, body = self.channel.basic_get(queue=queue_name)
+        return method_frame, header_frame, body
+
+    def publish(self, queue_name, routing_key, message):
+        if not self.channel:
+            raise ConnectionError("Connection is not established.")
+        self.channel.exchange_declare(exchange=self.exchange_name, durable=True)
+        self.channel.queue_declare(queue=queue_name, durable=True)
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key=routing_key,
+            body=message
         )
-        connection = pika.BlockingConnection(parameters)
-        self.channel = connection.channel()
-        return connection
+        print(f"Sent message to queue {queue_name}: {message}")
