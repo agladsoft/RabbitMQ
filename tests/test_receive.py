@@ -101,7 +101,7 @@ LIST_COLUMNS: list = [
 
 
 @pytest.fixture
-def mock_main(mocker):
+def mock_main(mocker: MagicMock) -> None:
     """
     Fixture for mocking all the main methods of class Receive and DataCoreClient.
 
@@ -128,7 +128,7 @@ def mock_main(mocker):
 
 
 @pytest.fixture
-def receive_instance(mock_main):
+def receive_instance(mock_main: MagicMock) -> Receive:
     """
     Fixture for creating an instance of class Receive
 
@@ -141,7 +141,7 @@ def receive_instance(mock_main):
 
 
 @pytest.fixture
-def datacore_client_instance(receive_instance, mock_main):
+def datacore_client_instance(receive_instance: Receive, mock_main: MagicMock) -> DataCoreClient:
     """
     Fixture for creating an instance of class DataCoreClient
 
@@ -158,7 +158,12 @@ def datacore_client_instance(receive_instance, mock_main):
     (time(hour=20, minute=1), time(hour=20, minute=0), True),
     (time(hour=19, minute=50), time(hour=20, minute=0), False),
 ])
-def test_receive_check_and_update_log(receive_instance, current_time: time, required_time: time, expected: bool):
+def test_receive_check_and_update_log(
+    receive_instance: Receive,
+    current_time: time,
+    required_time: time,
+    expected: bool
+) -> None:
     receive_instance.is_greater_time = expected
     is_updated: bool = receive_instance.check_and_update_log(
         current_time=current_time,
@@ -172,7 +177,7 @@ def test_receive_check_and_update_log(receive_instance, current_time: time, requ
     ("handle_incoming_json", (MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")),
     ("parse_message", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
 ])
-def test_receive_methods(receive_instance, method, expected):
+def test_receive_methods(receive_instance: Receive, method: callable, expected: tuple) -> None:
     """
     Tests methods read_json and read_msg of class Receive.
 
@@ -196,12 +201,12 @@ def test_receive_methods(receive_instance, method, expected):
     (MESSAGE_BODY, RZHDOperationsReport, "rzhd_by_operations_report", "24d198ac-1be2-11ef-809d-00505688b7b7"),
 ])
 def test_receive_parse_data(
-    receive_instance,
+    receive_instance: Receive,
     all_data: dict,
     data_core: Any,
     eng_table_name: str,
     key_deals: str
-):
+) -> None:
     """
     Tests the parse_data method of the Receive class.
 
@@ -251,7 +256,7 @@ def test_receive_write_to_json(receive_instance: Receive, tmp_path: PosixPath) -
     ({"Key": "value"}, {"key": "value"}),
     ({"kEY": "value"}, {"key": "value"}),
 ])
-def test_datacore_convert_to_lowercase(datacore_client_instance, data, expected):
+def test_datacore_convert_to_lowercase(datacore_client_instance: DataCoreClient, data: dict, expected: dict) -> None:
     """
     Tests the convert_to_lowercase method of the DataCoreClient class.
 
@@ -294,7 +299,12 @@ def test_datacore_convert_to_lowercase(datacore_client_instance, data, expected)
             {"status": True, "status2": True, "status3": False, "status4": False}
     ),
 ])
-def test_datacore_change_columns(datacore_client_instance, data, columns, expected):
+def test_datacore_change_columns(
+    datacore_client_instance: DataCoreClient,
+    data: dict,
+    columns: dict,
+    expected: dict
+) -> None:
     """
     Tests the change_columns method of the DataCoreClient class.
 
@@ -319,7 +329,13 @@ def test_datacore_change_columns(datacore_client_instance, data, columns, expect
     ({"key": "value"}, [], ["col2"], ["col2"]),
     ({"key": "value"}, ["col1"], ["col2"], ["col1", "col2"]),
 ])
-def test_datacore_check_difference_columns(datacore_client_instance, all_data, db_columns, rabbit_columns, expected):
+def test_datacore_check_difference_columns(
+    datacore_client_instance: DataCoreClient,
+    all_data: dict,
+    db_columns: list,
+    rabbit_columns: list,
+    expected: list
+) -> None:
     """
     Tests the check_difference_columns method of the DataCoreClient class.
 
@@ -352,10 +368,10 @@ def test_datacore_check_difference_columns(datacore_client_instance, all_data, d
     ("test_string", False, "test_string")
 ])
 def test_datacore_convert_format_date(
-        datacore_client_instance: DataCoreClient,
-        date_string: str,
-        is_datetime: bool,
-        expected: Union[date, datetime]
+    datacore_client_instance: DataCoreClient,
+    date_string: str,
+    is_datetime: bool,
+    expected: Union[date, datetime]
 ):
     """
     Tests the convert_format_date method of the DataCoreClient class.
