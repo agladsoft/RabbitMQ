@@ -33,8 +33,8 @@ def serialize_datetime(obj):
 
 class DataCoreClient:
     def __init__(self, receive):
-        self.receive = receive
-        self.removed_columns_db = ['uuid']
+        self.receive: "Receive" = receive
+        self.removed_columns_db: list = ['uuid']
         self._original_date_string: Optional[str] = None
 
     @property
