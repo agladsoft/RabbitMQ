@@ -63,7 +63,7 @@ class Receive:
                 password=get_my_env_var('PASSWORD')
             )
             client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connect to clickhouse")
+            self.logger.info("Success connected to clickhouse")
             self.client = client
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
