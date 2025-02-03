@@ -236,8 +236,12 @@ def test_update_stats(receive_instance: Receive, initial_data, updated_data):
 
 
 @pytest.mark.parametrize("method, expected", [
-    ("handle_incoming_json", (MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")),
-    ("_parse_message", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
+    ("handle_incoming_json", (
+        MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")
+     ),
+    ("_parse_message", (
+        MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7")
+     )
 ])
 def test_receive_methods(receive_instance: Receive, method: callable, expected: tuple) -> None:
     """
