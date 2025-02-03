@@ -26,12 +26,11 @@ def send_message():
     logger: get_logger = get_logger(os.path.basename(__file__).replace(".py", ""))
     logger.info("Send message to telegram")
     message: str = "Не было сообщений"
-    total_lines: int = 0
-
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, 'r') as file:
             logs: dict = json.load(file)
         if isinstance(logs, dict):
+            total_lines: int = 0
             message = handle_message(logs, message, total_lines)
     params: dict = {
         "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
