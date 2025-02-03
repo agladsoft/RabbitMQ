@@ -1,19 +1,16 @@
-import re
-import pytz
-import json
 import copy
 import requests
-import contextlib
 import time as time_
 from pathlib import Path
 from pika.spec import Basic
+from scripts.tables import *
 from scripts.__init__ import *
 from pika import BasicProperties
 from scripts.rabbit_mq import RabbitMQ
+from datetime import datetime, date, time
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
-from datetime import datetime, date, time, timedelta
 from pika.adapters.blocking_connection import BlockingChannel
 
 DATE_FORMATS: tuple = (
@@ -42,7 +39,7 @@ class Receive:
         self.logger: logging.getLogger = get_logger(
             os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
         )
-        self.rabbit_mq = RabbitMQ()
+        self.rabbit_mq: RabbitMQ = RabbitMQ()
         self.client: Optional[Client] = None
         self.connect_to_db()
         self.count_message: int = 0
@@ -52,6 +49,11 @@ class Receive:
         self.message_errors: list = []
 
     def connect_to_db(self) -> None:
+        """
+        Connect to ClickHouse database.
+        Establish a connection to the ClickHouse database. This method is called once when the script starts.
+        :return:
+        """
         try:
             client: Client = get_client(
                 host=get_my_env_var('HOST'),
@@ -67,18 +69,42 @@ class Receive:
             raise ConnectionError from ex_connect
 
     @staticmethod
-    def load_stats():
+    def load_stats() -> dict:
+        """
+        Load statistics from log file.
+
+        If file exists and not empty, method load statistics from file.
+        If file not exists or empty, method return empty dictionary.
+
+        :return: Loaded statistics.
+        """
         if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
             with open(LOG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
     @staticmethod
-    def save_stats(stats):
+    def save_stats(stats: dict) -> None:
+        """
+        Save statistics to log file.
+
+        This method save statistics to log file with json format.
+        :param stats: Statistics for save.
+        :return:
+        """
         with open(LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=4)
 
-    def update_stats(self):
+    def update_stats(self) -> None:
+        """
+        Update statistics in log file.
+
+        This method update statistics in log file. Statistics contain count of messages and processed table.
+        If queue_name not exists in statistics, method add it.
+        If queue_name exists in statistics, method update count of messages and processed table.
+
+        :return:
+        """
         stats = self.load_stats()
         today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if self.queue_name not in stats:
@@ -99,7 +125,23 @@ class Receive:
         current_time: time = datetime.now().time().replace(second=0, microsecond=0),
         required_time: time = time(hour=16, minute=58),
         time_sleep: int = 180
-    ):
+    ) -> bool:
+        """
+        Check time and update log if necessary.
+
+        If current time greater than required time and self.is_greater_time is True,
+        method create log file for writing count messages, update statistics in log file,
+        reset count of messages and table name, and set self.is_greater_time to False.
+        Method also sleep for time_sleep seconds.
+
+        If current time lesser than required time and self.is_greater_time is False,
+        method set self.is_greater_time to True.
+
+        :param current_time: Current time for compare with required time.
+        :param required_time: Required time for compare with current time.
+        :param time_sleep: Time for sleep in seconds.
+        :return: True if log was updated, False otherwise.
+        """
         if current_time >= required_time and self.is_greater_time:
             self.logger.info("Created log file for writing count messages")
             self.update_stats()
@@ -113,15 +155,25 @@ class Receive:
             self.is_greater_time = True
         return False
 
-    def send_stats(self):
+    def send_stats(self) -> Optional[requests.Response]:
+        """
+        Send statistics to Telegram.
+
+        If count of messages is 0, method return without doing anything.
+        Otherwise, method create message with count of messages, count of errors and table name,
+        log message, and then send message to Telegram.
+
+        :return: Response from Telegram API.
+        """
+        if self.count_message == 0:
+            return
         message: str = f"Очередь '{self.queue_name}' пустая.\nОбработанная таблица {self.table_name}.\n" \
                        f"Количество ошибок - {len(self.message_errors)}.\nОшибки - {self.message_errors}"
         self.logger.info(message)
         max_len_message: int = 4090
         if len(message) >= max_len_message:
             message = message[:max_len_message]
-        if self.count_message > 0:
-            self.update_stats()
+        self.update_stats()
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
             "text": message,
@@ -141,6 +193,20 @@ class Receive:
         properties: Union[BasicProperties, str],
         body: Union[bytes, str]
     ) -> None:
+        """
+        Callback function to process messages from the queue.
+
+        This function logs the start of the callback, increments the message count,
+        and processes the message data. If the data contains a valid core, it will handle
+        the rows; otherwise, it logs an error and attempts to insert the message into the
+        data core client. Finally, it logs the completion of the callback.
+
+        :param ch: The channel from which the message is received.
+        :param method: The delivery method of the message.
+        :param properties: The properties of the message.
+        :param body: The body of the message, which is expected to be in bytes or string format.
+        :return:
+        """
         self.check_and_update_log()
         self.count_message += 1
         self.logger: logging.getLogger = get_logger(
@@ -150,7 +216,7 @@ class Receive:
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
             f"Count messages is {self.count_message}"
         )
-        all_data, data, file_name, data_core, key_deals = self.read_json(body)
+        all_data, data, file_name, data_core, key_deals = self.handle_incoming_json(body)
         if data_core:
             data_core.handle_rows(all_data, data, key_deals)
         else:
@@ -160,53 +226,90 @@ class Receive:
             data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
-    def parse_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
+    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
+        """
+        Processes the given data, converting it to the required format and structure.
+
+        This method reads the provided JSON data, modifies it according to the specifications
+        of the data core, and generates a file name based on the English table name and
+        the current timestamp. It logs the process and handles any exceptions that occur
+        during data conversion. If the data contains discrepancies in column names, it raises
+        an assertion error.
+
+        :param all_data: A dictionary containing the entire dataset to be processed.
+        :param data: A list of data rows to be processed.
+        :param data_core: An instance of a data core class that provides methods for data manipulation.
+        :param eng_table_name: A string representing the English name of the table.
+        :param key_deals: A string identifier for key deals.
+        :return: A string representing the generated file name.
+        :raises AssertionError: If there are errors in data conversion or column name discrepancies.
+        """
         file_name: str = f"{eng_table_name}_{datetime.now(tz=TZ)}.json"
-        self.logger.info(f'Starting read json. Length of json is {len(data)}. Table is {eng_table_name}')
-        list_columns_db: list = data_core.get_table_columns()
+        self.logger.info(f'Starting read json. Length of json: {len(data)}. Table: {eng_table_name}')
+        list_columns_db = list(set(data_core.get_table_columns()) - set(data_core.removed_columns_db))
         original_date_string: str = data_core.original_date_string
-        [
-            list_columns_db.remove(remove_column) for remove_column in data_core.removed_columns_db
-            if remove_column in list_columns_db
-        ]
         try:
-            for i, row in enumerate(data):
-                data[i] = data_core.convert_to_lowercase(row)
+            for i in range(len(data)):
+                data[i] = data_core.convert_to_lowercase(data[i])
                 data_core.add_new_columns(data[i], file_name, original_date_string)
                 data_core.change_columns(data=data[i])
                 if original_date_string:
-                    data[i][original_date_string] = data[i][original_date_string].strip() \
-                        if data[i][original_date_string] else None
+                    data[i][original_date_string] = data[i][original_date_string].strip() or None
         except Exception as ex:
-            self.logger.error(
-                f"An error was received when converting data types. Table is {eng_table_name}. Exception is {ex}"
-            )
+            self.logger.error(f"Error converting data types. Table: {eng_table_name}. Exception: {ex}")
             self.message_errors.append(key_deals)
             self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
-        if data:
-            list_columns_rabbit: list = list(data[0].keys())
-            if _ := data_core.check_difference_columns(
-                all_data,
-                eng_table_name,
-                list_columns_db,
-                list_columns_rabbit,
-                key_deals,
-            ):
-                raise AssertionError("Stop consuming because columns is different")
+        if data and data_core.check_difference_columns(
+            all_data, eng_table_name, list_columns_db, list(data[0].keys()), key_deals,
+        ):
+            raise AssertionError("Stop consuming because columns is different")
         return file_name
 
     @staticmethod
-    def read_msg(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
+    def parse_message(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
+        """
+        Decodes and parses a message to extract relevant information.
+
+        This method takes a message in the form of bytes, string, or dictionary.
+        It decodes the message if it is in bytes format, and then parses it to
+        extract the entire data, Russian table name, and key deals identifier.
+
+        :param msg: The message to be processed, which can be bytes, string, or dictionary.
+        :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
+                 and the key deals identifier as a string.
+        """
         msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def read_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
-        all_data, rus_table_name, key_deals = self.read_msg(msg)
+    def handle_incoming_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
+        """
+        Handles an incoming JSON message.
+
+        This method takes a message in the form of bytes, string, or dictionary.
+        It decodes the message if it is in bytes format, and then parses it to
+        extract the entire data, Russian table name, and key deals identifier.
+
+        It then uses the Russian table name to look up the corresponding English
+        table name in the TABLE_NAMES dictionary. If the English table name is found,
+        it creates an instance of the corresponding data core class and uses it to
+        process the data. The processed data is then saved to a JSON file, and the
+        name of the file is returned along with the other data.
+
+        If the English table name is not found, it logs an error and writes the
+        original data to a file in the errors directory.
+
+        :param msg: The message to be processed, which can be bytes, string, or dictionary.
+        :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
+                 the name of the JSON file as a string (or None if the English table name is not found),
+                 the data core instance (or None if the English table name is not found), and the key deals
+                 identifier as a string.
+        """
+        all_data, rus_table_name, key_deals = self.parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
         data: list = copy.deepcopy(all_data).get("data", [])
@@ -214,7 +317,7 @@ class Receive:
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core(self)
-            file_name: str = self.parse_data(all_data, data, data_core, eng_table_name, key_deals)
+            file_name: str = self.process_data(all_data, data, data_core, eng_table_name, key_deals)
             return all_data, data, file_name, data_core, key_deals
         self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
         self.table_name = rus_table_name
@@ -227,11 +330,24 @@ class Receive:
         eng_table_name: str,
         dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
     ) -> str:
-        self.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
+        """
+        Writes a JSON message to a file.
 
+        This method takes a dictionary message, an English table name, and an optional
+        directory name as parameters. It saves the message to a JSON file with the
+        given English table name and current timestamp as the file name. If the
+        directory does not exist, it creates it. The method returns the name of the
+        file.
+
+        :param msg: The dictionary message to be saved to a file.
+        :param eng_table_name: The English table name to be used in the file name.
+        :param dir_name: The directory name where the file should be saved.
+                         Defaults to the `XL_IDP_PATH_RABBITMQ` environment variable with `/json` appended.
+        :return: The name of the file where the message was saved.
+        """
+        self.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
         file_name: str = f"{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}.json"
         fle: Path = Path(file_name)
-
         if not os.path.exists(fle.parent):  # Проверяем, существует ли директория
             os.makedirs(fle.parent)  # Создаем директорию, если не существует
 
@@ -240,959 +356,57 @@ class Receive:
 
         return file_name
 
-    def main(self):
-        try:
-            for queue_name, routing_key_name in QUEUES_AND_ROUTING_KEYS.items():
-                self.rabbit_mq.channel.queue_bind(
-                    exchange=self.rabbit_mq.exchange_name,
-                    queue=queue_name,
-                    routing_key=routing_key_name
-                )
-            while True:
-                for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):  # Убираем дублирующиеся очереди
-                    self.queue_name = queue_name
-                    self.count_message = 0
-                    while True:  # Читаем все сообщения из одной очереди
-                        method_frame, header_frame, body_ = self.rabbit_mq.channel.basic_get(
-                            queue=queue_name,
-                            auto_ack=False
-                        )
-                        if method_frame is None or method_frame.NAME == 'Basic.GetEmpty':
-                            self.send_stats()
-                            break  # Очередь пуста, переходим к следующей
+    def process_queue(self, queue_name: str) -> None:
+        """
+        Processes a queue.
 
-                        self.logger.info(f"Got message with queue_name: {queue_name}")
-                        try:
-                            self.callback(self.rabbit_mq.channel, method_frame, header_frame, body_)
-                            self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-                        except Exception as e:
-                            self.logger.error(f"Ошибка обработки: {e}")
-                            self.message_errors.append(self.read_msg(body_)[2])
-                            self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
-                time_.sleep(30)
+        This method processes a queue by consuming messages from it and executing
+        the callback function on each message. It also handles errors by logging
+        them and re-queueing the message.
+
+        :param queue_name: The name of the queue to be processed.
+        :return:
+        """
+        self.queue_name: str = queue_name
+        self.count_message: int = 0
+
+        while True:
+            method_frame, header_frame, body = self.rabbit_mq.get(queue_name)
+
+            if not method_frame or method_frame.NAME == 'Basic.GetEmpty':
+                self.send_stats()
+                break  # Очередь пуста
+
+            self.logger.info(f"Got message with queue_name: {queue_name}")
+
+            try:
+                self.callback(self.rabbit_mq.channel, method_frame, header_frame, body)
+                self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+            except Exception as e:
+                self.logger.error(f"Ошибка обработки: {e}")
+                self.message_errors.append(self.parse_message(body)[2])
+                self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+
+    def main(self):
+        """
+        This method is the main entry point of the script. It processes messages from
+        the queues listed in the QUEUES_AND_ROUTING_KEYS dictionary.
+
+        It runs an infinite loop, where it processes all queues, then waits for 60
+        seconds before starting again. If an exception is encountered, it logs the
+        error and closes the RabbitMQ connection.
+
+        :return:
+        """
+        try:
+            while True:
+                for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):
+                    self.process_queue(queue_name)
+                time_.sleep(60)
         except Exception as ex_:
             self.logger.error(f"Error: {ex_}")
         finally:
             self.rabbit_mq.close()
-
-
-class DataCoreClient:
-    def __init__(self, receive):
-        self.receive = receive
-        self.removed_columns_db = ['uuid']
-        self._original_date_string: Optional[str] = None
-
-    @property
-    def database(self):
-        return self.receive.client.database
-
-    @property
-    def table(self):
-        raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
-
-    @table.setter
-    def table(self, table: str):
-        self.table: str = table
-
-    @property
-    def deal(self):
-        raise NotImplementedError(f'Define deal in {self.__class__.__name__}.')
-
-    @property
-    def original_date_string(self):
-        return self._original_date_string
-
-    @original_date_string.setter
-    def original_date_string(self, value):
-        self._original_date_string: str = value
-
-    def change_columns(self, data: dict, *args, **kwargs) -> None:
-        """
-        Change columns in data using *args and **kwargs.
-        :param data: Dictionary with data to process.
-        :param args: Positional arguments (optional).
-        :param kwargs: Keyword arguments for column lists and additional flags.
-        """
-        float_columns: list = kwargs.get('float_columns', [])
-        int_columns: list = kwargs.get('int_columns', [])
-        date_columns: list = kwargs.get('date_columns', [])
-        bool_columns: list = kwargs.get('bool_columns', [])
-        is_datetime: bool = kwargs.get('is_datetime', False)
-
-        for column in float_columns:
-            data[column] = float(
-                re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column))).replace(",", ".")
-            ) if data.get(column) else None
-
-        for column in int_columns:
-            data[column] = int(
-                re.sub(r'(?<=\d)\s+(?=\d)', '', str(data.get(column)))
-            ) if data.get(column) else None
-
-        for column in date_columns:
-            data[column] = self.convert_format_date(
-                data.get(column), data, column, is_datetime=is_datetime
-            ) if data.get(column) else None
-
-        for column in bool_columns:
-            if isinstance(data.get(column), str):
-                data[column] = data.get(column).upper() == 'ДА'
-
-    def convert_format_date(self, date_: str, data: dict, column, is_datetime: bool = False) -> Union[datetime, str]:
-        for date_format in DATE_FORMATS:
-            with contextlib.suppress(ValueError):
-                if not is_datetime:
-                    date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
-                    date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
-                else:
-                    date_file = datetime.strptime(date_, date_format)
-                    date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
-                if date_file < date_db_access:
-                    data[self.original_date_string] += f"({column}: {date_file})\n"
-                    return date_db_access
-                return date_file
-        return date_
-
-    @staticmethod
-    def add_new_columns(data: dict, file_name: str, original_date_string: str) -> None:
-        data['sign'] = 1
-        data['original_file_parsed_on'] = file_name
-        data['is_obsolete_date'] = datetime.now(tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
-        if original_date_string:
-            data[original_date_string] = ''
-
-    @staticmethod
-    def convert_to_lowercase(data: dict):
-        return {k.lower(): v for k, v in data.items()}
-
-    def check_difference_columns(
-        self,
-        all_data: dict,
-        eng_table_name: str,
-        list_columns_db: list,
-        list_columns_rabbit: list,
-        key_deals: str
-    ) -> list:
-        diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
-        diff_rabbit: list = list(set(list_columns_rabbit) - set(list_columns_db))
-        if diff_db or diff_rabbit:
-            self.receive.logger.error(
-                f"The difference in columns {diff_db} from the database. "
-                f"The difference in columns {diff_rabbit} from the rabbit"
-            )
-            self.receive.message_errors.append(key_deals)
-            self.receive.write_to_json(
-                all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
-            )
-            self.insert_message(all_data, key_deals, is_success_inserted=False)
-            return diff_db + diff_rabbit
-        return []
-
-    def get_table_columns(self):
-        described_table = self.receive.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
-        return described_table.result_columns[0]
-
-    def insert_message(self, all_data: dict, key_deals: str, is_success_inserted: bool):
-        len_data: int = 100
-        all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
-        rows = [[
-            self.database,
-            self.table,
-            self.receive.queue_name,
-            key_deals,
-            datetime.now(tz=TZ) + timedelta(hours=3),
-            is_success_inserted,
-            json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
-        ]]
-        columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.receive.client.insert(
-            table=LOG_TABLE,
-            database="DataCore",
-            data=rows,
-            column_names=columns,
-            settings={"async_insert": 1, "wait_for_async_insert": 1}
-        )
-
-    def handle_rows(self, all_data, data: list, key_deals: str) -> None:
-        try:
-            # self.update_status(key_deals)
-            rows = [list(row.values()) for row in data] if data else [[]]
-            columns = list(data[0]) if data else []
-            if rows and columns:
-                # self.client.insert(
-                #     table=self.table,
-                #     database=self.database,
-                #     data=rows,
-                #     column_names=columns,
-                #     settings={"async_insert": 1, "wait_for_async_insert": 1}
-                # )
-                self.receive.logger.info("The data has been uploaded to the database")
-            # self.insert_message(all_data, key_deals, is_success_inserted=True)
-        except Exception as ex:
-            self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            self.receive.message_errors.append(key_deals)
-            self.receive.write_to_json(
-                all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
-            )
-            self.insert_message(all_data, key_deals, is_success_inserted=False)
-
-    def update_status(self, key_deals: str) -> None:
-        query = (
-            f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
-            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} = '{key_deals}' "
-            f"GROUP BY uuid HAVING SUM(sign) > 0"
-            f")"
-        )
-        selected_query = self.receive.client.query(query)
-        if rows_query := selected_query.result_rows:
-            list_rows = [
-                {column: -1 if column == 'sign' else value
-                 for value, column in zip(row, selected_query.column_names)}
-                for row in rows_query
-            ]
-            rows = [list(row.values()) for row in list_rows]
-            columns = list(list_rows[0].keys())
-            self.receive.client.insert(
-                table=self.table,
-                database=self.database,
-                data=rows,
-                column_names=columns,
-                settings={"async_insert": 1, "wait_for_async_insert": 1}
-            )
-        self.receive.logger.info("Data processing in the database is completed")
-
-    def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
-        self.receive.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
-        self.receive.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
-
-    def __exit__(self, exception_type, exception_val, trace):
-        try:
-            self.receive.client.close()
-            self.receive.logger.info("Success disconnect clickhouse")
-        except AttributeError:  # isn't closable
-            self.receive.logger.info("Not closable")
-            return True
-
-
-class DataCoreFreight(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_voyage_month_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        data: dict = kwargs.get('data')
-        super().change_columns(
-            data=data,
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_count', 'container_size', 'operation_month'],
-            date_columns=['voyage_date', 'operation_date', 'voyage_month'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-        data['voyage_month'] = data['voyage_month'].month if data.get('voyage_month') else None
-
-
-class NaturalIndicatorsContractsSegments(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['year', 'month'],
-            date_columns=['date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class CounterParties(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-
-class OrdersReport(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_voyage_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=['voyage_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class AutoPickupGeneralReport(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_delivery_plan_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=[
-                'overpayment', 'downtime_amount', 'agreed_rate',
-                'total_rate', 'carrier_rate', 'economy',
-                'overload_amount', 'add_expense_amount'
-            ],
-            int_columns=['container_size'],
-            date_columns=[
-                'date_delivery_empty_fact', 'date_delivery_empty_plan', 'date_loading_fact',
-                'date_delivery_fact', 'date_receiving_empty_fact', 'date_delivery_plan',
-                'date_loading_plan', 'date_receiving_empty_plan'
-            ],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class TransportUnits(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-
-class Consignments(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_voyage_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'teu', 'year'],
-            date_columns=['voyage_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class SalesPlan(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['teu', 'container_count', 'container_size', 'year', 'month'],
-            date_columns=kwargs.get('date_columns', []),
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class NaturalIndicatorsTransactionFactDate(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_operation_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=[
-                'container_size', 'operation_month', 'container_count',
-                'teu', 'operation_year'
-            ],
-            date_columns=['operation_date', 'order_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class DevelopmentCounterpartyDepartment(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['year'],
-            date_columns=kwargs.get('date_columns', []),
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class ExportBookings(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_booking_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'container_count', 'freight_rate', 'teu'],
-            date_columns=['cargo_readiness', 'etd', 'eta', 'booking_date', 'sob'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class ImportBookings(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_booking_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'container_count', 'freight_rate', 'teu'],
-            date_columns=['etd', 'eta', 'booking_date', 'sob'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class CompletedRepackagesReport(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_repacking_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=[
-                'warehouse_wms_count', 'inspection_container_count', 'import_teu',
-                'import_container_count', 'export_teu', 'export_container_count'
-            ],
-            date_columns=['repacking_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class AutoVisits(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_entry_datetime_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['processing_time', 'waiting_time'],
-            date_columns=['exit_datetime', 'entry_datetime', 'registration_datetime'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=True
-        )
-
-
-class AccountingDocumentsRequests(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_request_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=['start_date', 'end_date', 'request_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=True
-        )
-
-
-class DailySummary(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_motion_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=['tonnage', 'cargo_weight'],
-            int_columns=['tare_weight', 'container_size'],
-            date_columns=['motion_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=True
-        )
-
-
-class RZHDOperationsReport(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_operation_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'operation_month', 'operation_year'],
-            date_columns=['operation_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class OrdersMarginalityReport(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_order_creation_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=[
-                'expenses_rental_without_vat_fact', 'income_without_vat_fact', 'profit_plan',
-                'income_without_vat_plan', 'expenses_without_vat_plan', 'expenses_without_vat_fact',
-                'profit_fact'
-            ],
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=['order_creation_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'container_count', 'teu', 'internal_customs_transit'],
-            date_columns=['date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class Accounts(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=['profit_account_rub', 'profit_account'],
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=['date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class FreightRates(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=['rate'],
-            int_columns=['oversized_width', 'oversized_height', 'oversized_length'],
-            date_columns=['expiration_date', 'start_date'],
-            bool_columns=['priority', 'oversized', 'dangerous', 'special_rate', 'guideline'],
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class MarginalityOrdersActDate(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_act_creation_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=[
-                'profit_plan', 'variable_costs_plan', 'margin_plan',
-                'profit_fact', 'variable_costs_fact', 'margin_fact',
-                'margin_fact_percent', 'margin_fact_per_unit'
-            ],
-            int_columns=['count_ktk_by_order', 'count_ktk_by_operation'],
-            date_columns=['act_creation_date', 'act_creation_date_max'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class RusconProducts(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_kp_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=[
-                'kp_amount', 'kp_margin', 'kp_margin_amount', 'kp_margin_container',
-                'kp_amount_cost', 'kp_revenue_rate_container', 'kp_cost_container'
-            ],
-            int_columns=['container_count_40', 'container_count_20', 'container_count'],
-            date_columns=['kp_date'],
-            bool_columns=['dangerous'],
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class ReferenceLocations(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=['lat_port', 'long_port'],
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=kwargs.get('date_columns', []),
-            bool_columns=['is_border_crossing'],
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class TerminalsCapacity(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'teu', 'container_count'],
-            date_columns=['date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class ManagerEvaluation(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def database(self):
-        return "DO"
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
-    def original_date_string(self):
-        return "original_date_string"
-    
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['evaluation'],
-            date_columns=['evaluation_date'],
-            bool_columns=kwargs.get('bool_columns', []),
-            is_datetime=kwargs.get('is_datetime', False)
-        )
-
-
-class ReferenceCounterparties(DataCoreClient):
-    def __init__(self, receive: Receive):
-        super().__init__(receive=receive)
-
-    @property
-    def database(self):
-        return "DO"
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    def change_columns(self, *args, **kwargs) -> None:
-        super().change_columns(
-            data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=kwargs.get('int_columns', []),
-            date_columns=kwargs.get('date_columns', []),
-            bool_columns=['is_control', 'is_foreign_company'],
-            is_datetime=kwargs.get('is_datetime', False)
-        )
 
 
 CLASSES: list = [

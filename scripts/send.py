@@ -1,8 +1,12 @@
 from rabbit_mq import RabbitMQ
 
 
-def read_file(file_path=''):
-    """Reading json format file"""
+def read_file(file_path='') -> bytes:
+    """
+    Reading json format file.
+    :param file_path: File path.
+    :return: File content.
+    """
     with open(file_path, 'rb') as file:
         data = file.read()
     return data
