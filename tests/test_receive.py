@@ -237,7 +237,7 @@ def test_update_stats(receive_instance: Receive, initial_data, updated_data):
 
 @pytest.mark.parametrize("method, expected", [
     ("handle_incoming_json", (MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")),
-    ("parse_message", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
+    ("_parse_message", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
 ])
 def test_receive_methods(receive_instance: Receive, method: callable, expected: tuple) -> None:
     """
@@ -259,15 +259,16 @@ def test_receive_methods(receive_instance: Receive, method: callable, expected: 
     assert result[-1] == expected[-1]
 
 
-@pytest.mark.parametrize("all_data, data_core, eng_table_name, key_deals", [
-    (MESSAGE_BODY, RZHDOperationsReport, "rzhd_by_operations_report", "24d198ac-1be2-11ef-809d-00505688b7b7"),
+@pytest.mark.parametrize("all_data, data_core, eng_table_name, key_deals, expected", [
+    (MESSAGE_BODY, RZHDOperationsReport, "rzhd_by_operations_report", "24d198ac-1be2-11ef-809d-00505688b7b7", 20),
 ])
 def test_receive_parse_data(
     receive_instance: Receive,
     all_data: dict,
     data_core: Any,
     eng_table_name: str,
-    key_deals: str
+    key_deals: str,
+    expected: int
 ) -> None:
     """
     Tests the parse_data method of the Receive class.
@@ -286,7 +287,7 @@ def test_receive_parse_data(
     data = copy.deepcopy(MESSAGE_BODY).get("data", [])
     receive_instance.process_data(all_data, data, data_core(receive_instance), eng_table_name, key_deals)
 
-    assert eng_table_name in file_name
+    assert data[0]["container_size"] == expected
 
 
 def test_receive_write_to_json(receive_instance: Receive, tmp_path: PosixPath) -> None:
