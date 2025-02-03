@@ -6,18 +6,12 @@ from pika.spec import Basic
 from scripts.tables import *
 from scripts.__init__ import *
 from pika import BasicProperties
+from datetime import datetime, time
 from scripts.rabbit_mq import RabbitMQ
-from datetime import datetime, date, time
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
 from typing import Tuple, Union, Optional, Any
 from pika.adapters.blocking_connection import BlockingChannel
-
-
-def serialize_datetime(obj):
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    raise TypeError("Type not serializable")
 
 
 class Receive:
