@@ -122,8 +122,8 @@ class Receive:
 
     def check_and_update_log(
         self,
-        current_time: time = datetime.now().time().replace(second=0, microsecond=0),
-        required_time: time = time(hour=16, minute=58),
+        current_time: time = datetime.now(tz=TZ).time().replace(second=0, microsecond=0),
+        required_time: time = time(hour=19, minute=58),
         time_sleep: int = 180
     ) -> bool:
         """
