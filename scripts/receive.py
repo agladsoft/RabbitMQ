@@ -419,7 +419,6 @@ class Receive:
             while True:
                 for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):
                     self.process_queue(queue_name)
-                self.logger.info(f"No messages found, sleeping for {delay} seconds...")
                 time_.sleep(delay)
         except Exception as ex_:
             self.logger.error(f"Error: {ex_}")
