@@ -1,12 +1,13 @@
-import copy
 import os
+import copy
 import json
 import pytest
 from typing import Union, Any
 from pathlib import PosixPath
+from scripts.receive import Receive
 from unittest.mock import MagicMock
 from datetime import date, datetime, time
-from scripts.receive import Receive, RZHDOperationsReport, DataCoreClient
+from scripts.tables import RZHDOperationsReport, DataCoreClient
 
 # Пример тела сообщения RabbitMQ
 MESSAGE_BODY: dict = {
@@ -106,7 +107,7 @@ def mock_main(mocker):
 
     It patches the following methods:
     - Receive.main
-    - Receive.check_queue_empty
+    - Receive.send_stats
     - DataCoreClient.connect_to_db
     - DataCoreClient.handle_rows
     - DataCoreClient.insert_message
@@ -117,8 +118,8 @@ def mock_main(mocker):
     :return:
     """
     mocker.patch("scripts.receive.Receive.main")
-    mocker.patch("scripts.receive.Receive.check_queue_empty", return_value=200)
-    mocker.patch("scripts.receive.DataCoreClient.connect_to_db", return_value=MagicMock())
+    mocker.patch("scripts.receive.Receive.send_stats", return_value=200)
+    mocker.patch("scripts.receive.Receive.connect_to_db", return_value=MagicMock())
     mocker.patch("scripts.receive.DataCoreClient.handle_rows")
     mocker.patch("scripts.receive.DataCoreClient.insert_message")
     mocker.patch("scripts.receive.DataCoreClient.update_status")
@@ -140,16 +141,17 @@ def receive_instance(mock_main):
 
 
 @pytest.fixture
-def datacore_client_instance(mock_main):
+def datacore_client_instance(receive_instance, mock_main):
     """
     Fixture for creating an instance of class DataCoreClient
 
     It creates an instance of class DataCoreClient.
     The connect_to_db method of DataCoreClient is patched in fixture mock_main.
+    :param receive_instance: An instance of class Receive
     :param mock_main: An instance of class DataCoreClient
     :return:
     """
-    return DataCoreClient()
+    return DataCoreClient(receive_instance)
 
 
 @pytest.mark.parametrize("current_time, required_time, expected", [
@@ -167,8 +169,8 @@ def test_receive_check_and_update_log(receive_instance, current_time: time, requ
 
 
 @pytest.mark.parametrize("method, expected", [
-    ("read_json", (MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")),
-    ("read_msg", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
+    ("handle_incoming_json", (MESSAGE_BODY, RZHDOperationsReport, "24d198ac-1be2-11ef-809d-00505688b7b7")),
+    ("parse_message", (MESSAGE_BODY, "ОтчетПоЖДПеревозкамМаркетингПоОперациям", "24d198ac-1be2-11ef-809d-00505688b7b7"))
 ])
 def test_receive_methods(receive_instance, method, expected):
     """
@@ -215,7 +217,7 @@ def test_receive_parse_data(
     :return:
     """
     data = copy.deepcopy(MESSAGE_BODY).get("data", [])
-    file_name = receive_instance.parse_data(all_data, data, data_core(), eng_table_name, key_deals)
+    file_name = receive_instance.process_data(all_data, data, data_core(receive_instance), eng_table_name, key_deals)
 
     assert eng_table_name in file_name
 
