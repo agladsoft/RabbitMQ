@@ -35,10 +35,11 @@ def serialize_datetime(obj):
 
 
 class Receive:
-    def __init__(self):
+    def __init__(self, log_file: str = LOG_FILE):
         self.logger: logging.getLogger = get_logger(
             os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
         )
+        self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
         self.client: Optional[Client] = None
         self.connect_to_db()
@@ -68,8 +69,7 @@ class Receive:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
 
-    @staticmethod
-    def load_stats() -> dict:
+    def load_stats(self) -> dict:
         """
         Load statistics from log file.
 
@@ -78,13 +78,12 @@ class Receive:
 
         :return: Loaded statistics.
         """
-        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
-            with open(LOG_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(self.log_file) and os.path.getsize(self.log_file) > 0:
+            with open(self.log_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
-    @staticmethod
-    def save_stats(stats: dict) -> None:
+    def save_stats(self, stats: dict) -> None:
         """
         Save statistics to log file.
 
@@ -92,7 +91,7 @@ class Receive:
         :param stats: Statistics for save.
         :return:
         """
-        with open(LOG_FILE, "w", encoding="utf-8") as f:
+        with open(self.log_file, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=4)
 
     def update_stats(self) -> None:
@@ -120,7 +119,7 @@ class Receive:
 
         self.save_stats(stats)
 
-    def check_and_update_log(
+    def _check_and_update_log(
         self,
         current_time: time = datetime.now(tz=TZ).time().replace(second=0, microsecond=0),
         required_time: time = time(hour=19, minute=58),
@@ -155,36 +154,53 @@ class Receive:
             self.is_greater_time = True
         return False
 
-    def send_stats(self) -> Optional[requests.Response]:
+    def _send_with_retries(self, message: str) -> Optional[requests.Response]:
         """
-        Send statistics to Telegram.
-
-        If count of messages is 0, method return without doing anything.
-        Otherwise, method create message with count of messages, count of errors and table name,
-        log message, and then send message to Telegram.
-
-        :return: Response from Telegram API.
+        Try sending the message up to 3 times with exponential backoff.
         """
-        if self.count_message == 0:
-            return
-        message: str = f"Очередь '{self.queue_name}' пустая.\nОбработанная таблица {self.table_name}.\n" \
-                       f"Количество ошибок - {len(self.message_errors)}.\nОшибки - {self.message_errors}"
-        self.logger.info(message)
-        max_len_message: int = 4090
-        if len(message) >= max_len_message:
-            message = message[:max_len_message]
-        self.update_stats()
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
             "text": message,
             "reply_to_message_id": get_my_env_var('MESSAGE_ID')
         }
-        if self.message_errors:
-            self.message_errors = []
-            url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            return response
+        url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
+
+        for attempt in range(3):
+            try:
+                response = requests.get(url, params=params, timeout=120)
+                response.raise_for_status()
+                return response
+            except requests.RequestException as e:
+                self.logger.warning(f"Sending error ({attempt + 1}/3): {e}")
+                time_.sleep(30 * (2 ** attempt))  # Exponential backoff: 30s, 60s, 120s
+
+        self.logger.error("Couldn't send a message after 3 attempts")
+
+    def send_stats(self) -> Optional[requests.Response]:
+        """
+        Send statistics to Telegram.
+
+        Sends a message to a specified Telegram chat with statistics about the processed queue.
+        The message includes the queue name, processed table, error count, and error details.
+        The method attempts to send the message up to three times, with a 30-second delay
+        between attempts in case of failure.  If errors occurred during processing, they are
+        cleared after a successful send. If sending fails after three attempts, an error is logged.
+
+        :return: The response from the Telegram API if the message was sent successfully,
+                 None otherwise, or if no errors occurred or no messages were processed.
+        """
+        if self.count_message == 0:
+            return
+
+        message: str = (f"Очередь '{self.queue_name}' пустая.\nОбработанная таблица {self.table_name}.\n"
+                        f"Количество ошибок - {len(self.message_errors)}.\nОшибки - {self.message_errors}")[:4090]
+        self.logger.info(message)
+        self.update_stats()
+        if not self.message_errors:
+            return
+
+        self.message_errors = []
+        return self._send_with_retries(message)
 
     def callback(
         self,
@@ -207,7 +223,7 @@ class Receive:
         :param body: The body of the message, which is expected to be in bytes or string format.
         :return:
         """
-        self.check_and_update_log()
+        self._check_and_update_log()
         self.count_message += 1
         self.logger: logging.getLogger = get_logger(
             os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
@@ -216,7 +232,7 @@ class Receive:
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
             f"Count messages is {self.count_message}"
         )
-        all_data, data, file_name, data_core, key_deals = self.handle_incoming_json(body)
+        all_data, data, data_core, key_deals = self.handle_incoming_json(body)
         if data_core:
             data_core.handle_rows(all_data, data, key_deals)
         else:
@@ -226,7 +242,7 @@ class Receive:
             data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
-    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> str:
+    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> None:
         """
         Processes the given data, converting it to the required format and structure.
 
@@ -265,10 +281,9 @@ class Receive:
             all_data, eng_table_name, list_columns_db, list(data[0].keys()), key_deals,
         ):
             raise AssertionError("Stop consuming because columns is different")
-        return file_name
 
     @staticmethod
-    def parse_message(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
+    def _parse_message(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
         """
         Decodes and parses a message to extract relevant information.
 
@@ -286,7 +301,7 @@ class Receive:
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def handle_incoming_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Optional[str], Any, str]:
+    def handle_incoming_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Any, str]:
         """
         Handles an incoming JSON message.
 
@@ -309,7 +324,7 @@ class Receive:
                  the data core instance (or None if the English table name is not found), and the key deals
                  identifier as a string.
         """
-        all_data, rus_table_name, key_deals = self.parse_message(msg)
+        all_data, rus_table_name, key_deals = self._parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
         data: list = copy.deepcopy(all_data).get("data", [])
@@ -317,12 +332,12 @@ class Receive:
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core(self)
-            file_name: str = self.process_data(all_data, data, data_core, eng_table_name, key_deals)
-            return all_data, data, file_name, data_core, key_deals
-        self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
-        self.table_name = rus_table_name
-        self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
-        return all_data, data, None, data_core, key_deals
+            self.process_data(all_data, data, data_core, eng_table_name, key_deals)
+        else:
+            self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
+            self.table_name = rus_table_name
+            self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
+        return all_data, data, data_core, key_deals
 
     def write_to_json(
         self,
@@ -375,7 +390,7 @@ class Receive:
 
             if not method_frame or method_frame.NAME == 'Basic.GetEmpty':
                 self.send_stats()
-                break  # Очередь пуста
+                break
 
             self.logger.info(f"Got message with queue_name: {queue_name}")
 
@@ -384,8 +399,9 @@ class Receive:
                 self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
-                self.message_errors.append(self.parse_message(body)[2])
+                self.message_errors.append(self._parse_message(body)[2])
                 self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                break
 
     def main(self):
         """
@@ -398,11 +414,13 @@ class Receive:
 
         :return:
         """
+        delay: int = 60
         try:
             while True:
                 for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):
                     self.process_queue(queue_name)
-                time_.sleep(60)
+                self.logger.info(f"No messages found, sleeping for {delay} seconds...")
+                time_.sleep(delay)
         except Exception as ex_:
             self.logger.error(f"Error: {ex_}")
         finally:

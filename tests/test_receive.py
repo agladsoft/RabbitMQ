@@ -2,6 +2,7 @@ import os
 import copy
 import json
 import pytest
+import tempfile
 from typing import Union, Any
 from pathlib import PosixPath
 from scripts.receive import Receive
@@ -128,16 +129,25 @@ def mock_main(mocker: MagicMock) -> None:
 
 
 @pytest.fixture
-def receive_instance(mock_main: MagicMock) -> Receive:
+def temp_log_file():
+    """Создает временный файл для логов и возвращает его путь."""
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        yield temp_file.name
+    os.remove(temp_file.name)  # Удаляем файл после тестов
+
+
+@pytest.fixture
+def receive_instance(temp_log_file: str, mock_main: MagicMock) -> Receive:
     """
     Fixture for creating an instance of class Receive
 
     It creates an instance of class Receive and calls its main method.
     The main method is patched in fixture mock_main.
+    :param temp_log_file:
     :param mock_main: An instance of class Receive
     :return:
     """
-    return Receive()
+    return Receive(log_file=temp_log_file)
 
 
 @pytest.fixture
@@ -165,12 +175,64 @@ def test_receive_check_and_update_log(
     expected: bool
 ) -> None:
     receive_instance.is_greater_time = expected
-    is_updated: bool = receive_instance.check_and_update_log(
+    is_updated: bool = receive_instance._check_and_update_log(
         current_time=current_time,
         required_time=required_time,
         time_sleep=1
     )
     assert is_updated == expected
+
+
+@pytest.mark.parametrize(
+    "initial_data, expected_result",
+    [
+        (None, {}),  # Пустой файл
+        (
+            {"test_queue": {"timestamp": "2024-02-03 12:00:00", "count_message": 10, "processed_table": "table1"}},
+            {"test_queue": {"timestamp": "2024-02-03 12:00:00", "count_message": 10, "processed_table": "table1"}}
+        ),  # Сохранение и загрузка статистики
+    ]
+)
+def test_load_stats(receive_instance: Receive, initial_data: dict, expected_result: dict) -> None:
+    if initial_data:
+        receive_instance.save_stats(initial_data)
+    assert receive_instance.load_stats() == expected_result
+
+
+@pytest.mark.parametrize(
+    "initial_data, updated_data",
+    [
+        (
+            {
+                "test_queue": {
+                    "timestamp": "2024-02-03 12:00:00",
+                    "count_message": 3,
+                    "processed_table": "old_table"
+                }
+            },
+            {
+                "test_queue": {
+                    "timestamp": "2024-02-03 12:00:00",
+                    "count_message": 8,
+                    "processed_table": "test_table"
+                }
+            }
+        ),  # Обновление статистики существующей очереди
+    ]
+)
+def test_update_stats(receive_instance: Receive, initial_data, updated_data):
+    if initial_data:
+        receive_instance.save_stats(initial_data)
+
+    receive_instance.queue_name = list(initial_data.keys())[0]
+    receive_instance.count_message = 5
+    receive_instance.table_name = "test_table"
+
+    receive_instance.update_stats()
+    stats = receive_instance.load_stats()
+    assert stats["test_queue"]["count_message"] == updated_data["test_queue"]["count_message"]
+    assert stats["test_queue"]["processed_table"] == updated_data["test_queue"]["processed_table"]
+    assert "timestamp" in stats["test_queue"]
 
 
 @pytest.mark.parametrize("method, expected", [
@@ -222,7 +284,7 @@ def test_receive_parse_data(
     :return:
     """
     data = copy.deepcopy(MESSAGE_BODY).get("data", [])
-    file_name = receive_instance.process_data(all_data, data, data_core(receive_instance), eng_table_name, key_deals)
+    receive_instance.process_data(all_data, data, data_core(receive_instance), eng_table_name, key_deals)
 
     assert eng_table_name in file_name
 
