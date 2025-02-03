@@ -103,7 +103,7 @@ class Receive:
         self,
         current_time: time = datetime.now(tz=TZ).time().replace(second=0, microsecond=0),
         required_time: time = time(hour=19, minute=58),
-        time_sleep: int = 180
+        time_sleep: int = 300
     ) -> bool:
         """
         Check time and update log if necessary.
