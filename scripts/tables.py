@@ -42,16 +42,16 @@ class DataCoreClient:
         return self.receive.client.database
 
     @property
-    def table(self):
-        raise NotImplementedError(f'Define table name in {self.__class__.__name__}.')
-
-    @table.setter
-    def table(self, table: str):
-        self.table: str = table
+    def deal(self):
+        return "key_id"
 
     @property
-    def deal(self):
-        raise NotImplementedError(f'Define deal in {self.__class__.__name__}.')
+    def table(self):
+        return self.table
+
+    @table.setter
+    def table(self, value: str):
+        self.table: str = value
 
     @property
     def original_date_string(self):
@@ -362,14 +362,6 @@ class DataCoreFreight(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_voyage_month_string"
 
@@ -392,14 +384,6 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_date_string"
 
@@ -418,26 +402,10 @@ class CounterParties(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
 
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
 
 class OrdersReport(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -457,14 +425,6 @@ class OrdersReport(DataCoreClient):
 class AutoPickupGeneralReport(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -493,26 +453,10 @@ class TransportUnits(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
 
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
 
 class Consignments(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -533,14 +477,6 @@ class SalesPlan(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
 
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
             data=kwargs.get('data'),
@@ -555,14 +491,6 @@ class SalesPlan(DataCoreClient):
 class NaturalIndicatorsTransactionFactDate(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -586,14 +514,6 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
 
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
             data=kwargs.get('data'),
@@ -608,14 +528,6 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
 class ExportBookings(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -637,14 +549,6 @@ class ImportBookings(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_booking_date_string"
 
@@ -662,14 +566,6 @@ class ImportBookings(DataCoreClient):
 class CompletedRepackagesReport(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -694,14 +590,6 @@ class AutoVisits(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_entry_datetime_string"
 
@@ -719,14 +607,6 @@ class AutoVisits(DataCoreClient):
 class AccountingDocumentsRequests(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -748,14 +628,6 @@ class DailySummary(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_motion_date_string"
 
@@ -775,14 +647,6 @@ class RZHDOperationsReport(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_operation_date_string"
 
@@ -800,14 +664,6 @@ class RZHDOperationsReport(DataCoreClient):
 class OrdersMarginalityReport(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -833,14 +689,6 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_date_string"
 
@@ -858,14 +706,6 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
 class Accounts(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -887,14 +727,6 @@ class FreightRates(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_date_string"
 
@@ -912,14 +744,6 @@ class FreightRates(DataCoreClient):
 class MarginalityOrdersActDate(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -945,14 +769,6 @@ class RusconProducts(DataCoreClient):
         super().__init__(receive=receive)
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_kp_date_string"
 
@@ -974,14 +790,6 @@ class ReferenceLocations(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
 
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
             data=kwargs.get('data'),
@@ -996,14 +804,6 @@ class ReferenceLocations(DataCoreClient):
 class TerminalsCapacity(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     @property
     def original_date_string(self):
@@ -1029,14 +829,6 @@ class ManagerEvaluation(DataCoreClient):
         return "DO"
 
     @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
-
-    @property
     def original_date_string(self):
         return "original_date_string"
 
@@ -1058,14 +850,6 @@ class ReferenceCounterparties(DataCoreClient):
     @property
     def database(self):
         return "DO"
-
-    @property
-    def table(self):
-        return self.table
-
-    @property
-    def deal(self):
-        return "key_id"
 
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
