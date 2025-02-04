@@ -73,6 +73,7 @@ deactivate receive
 
 
 @startuml
+allow_mixing
 package "tables_py" {
     left to right direction
     class DataCoreClient {
@@ -254,4 +255,26 @@ package "receive_py" {
 }
 
 DataCoreClient --> Receive
+
+queue Queue1
+queue Queue2
+queue Queue3
+queue Queue4
+queue Queue5
+queue Queue6
+queue Queue7
+queue Queue8
+queue Queue9
+queue Queue10
+
+Receive --> Queue1
+Receive --> Queue2
+Receive --> Queue3
+Receive --> Queue4
+Receive --> Queue5
+Receive --> Queue6
+Receive --> Queue7
+Receive --> Queue8
+Receive --> Queue9
+Receive --> Queue10
 @enduml
