@@ -266,6 +266,7 @@ queue Queue7
 queue Queue8
 queue Queue9
 queue Queue10
+queue ...
 
 Receive --> Queue1
 Receive --> Queue2
@@ -277,4 +278,5 @@ Receive --> Queue7
 Receive --> Queue8
 Receive --> Queue9
 Receive --> Queue10
+Receive --> "..."
 @enduml
