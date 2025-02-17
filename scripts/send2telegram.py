@@ -10,14 +10,14 @@ def handle_message(logs: dict, message: str, total_lines: int) -> str:
         processed_table: str = log_data.get("processed_table")
         total_lines += count
         messages.append(
-            f"Очередь: `{queue}`\n"
-            f"Обработанная таблица: \n`{processed_table}`"
-            f"\nКоличество сообщений: {count}\n"
+            f"📥 Очередь: `{queue}`\n"
+            f"📊 Обработанная таблица: \n`{processed_table}`\n"
+            f"🔢 Количество сообщений: *{count}*\n"
         )
 
     if messages:
         message = "\n".join(messages)
-        message += f"\n📊 *Общее количество строк: {total_lines}*"
+        message += f"\n📈 *Общее количество строк: {total_lines}*"
 
     return message
 

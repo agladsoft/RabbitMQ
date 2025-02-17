@@ -175,10 +175,10 @@ class Receive:
             return
 
         message: str = (
-            f"Очередь: `{self.queue_name}` пустая\n"
-            f"Обработанная таблица: `{self.table_name}`\n"
-            f"Количество ошибок: {len(self.message_errors)}\n"
-            f"Ошибки: `{self.message_errors}`"
+            f"📥 Очередь: `{self.queue_name}` пустая\n"
+            f"📊 Обработанная таблица: `{self.table_name}`\n"
+            f"🚨 Количество ошибок: {len(self.message_errors)}\n"
+            f"⚠️ Ошибки: `{self.message_errors}`"
         )[:4090]
         self.logger.info(message)
         if not self.message_errors:
