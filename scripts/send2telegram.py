@@ -1,6 +1,6 @@
 import json
 import requests
-from __init__ import *
+from scripts.__init__ import *
 
 
 def handle_message(logs: dict, message: str, total_lines: int) -> str:

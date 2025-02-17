@@ -1,5 +1,5 @@
 from abc import ABC
-from receive import DataCoreClient
+from scripts.receive import DataCoreClient
 
 
 class AllDeletedTables(DataCoreClient, ABC):

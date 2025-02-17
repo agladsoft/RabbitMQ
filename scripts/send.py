@@ -1,4 +1,4 @@
-from rabbit_mq import RabbitMQ
+from scripts.rabbit_mq import RabbitMQ
 
 
 def read_file(file_path='') -> bytes:
