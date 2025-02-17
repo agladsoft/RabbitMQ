@@ -28,6 +28,7 @@ class Receive:
         self.queue_name: Optional[str] = None
         self.table_name: Optional[str] = None
         self.message_errors: list = []
+        self.queue_name_errors: list = []
 
     def connect_to_db(self) -> None:
         """
@@ -140,7 +141,8 @@ class Receive:
         """
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
-            "text": message,
+            "text": f"\n{message}\n",
+            "parse_mode": "MarkdownV2",
             "reply_to_message_id": get_my_env_var('MESSAGE_ID')
         }
         url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
@@ -172,11 +174,15 @@ class Receive:
         if self.count_message == 0:
             return
 
-        message: str = (f"Очередь '{self.queue_name}' пустая.\nОбработанная таблица {self.table_name}.\n"
-                        f"Количество ошибок - {len(self.message_errors)}.\nОшибки - {self.message_errors}")[:4090]
+        message: str = (
+            f"Очередь: `{self.queue_name}` пустая\n"
+            f"Обработанная таблица: `{self.table_name}`\n"
+            f"Количество ошибок: {len(self.message_errors)}\n"
+            f"Ошибки: `{self.message_errors}`"
+        )[:4090]
         self.logger.info(message)
-        self.update_stats()
         if not self.message_errors:
+            self.update_stats()
             return
 
         self.message_errors = []
@@ -216,10 +222,10 @@ class Receive:
         if data_core:
             data_core.handle_rows(all_data, data, key_deals)
         else:
-            self.message_errors.append(key_deals)
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
             data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
+            raise AssertionError(f"Not found table name in dictionary. Russian table is {self.table_name}")
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
     def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> None:
@@ -253,13 +259,9 @@ class Receive:
                     data[i][original_date_string] = data[i][original_date_string].strip() or None
         except Exception as ex:
             self.logger.error(f"Error converting data types. Table: {eng_table_name}. Exception: {ex}")
-            self.message_errors.append(key_deals)
-            self.write_to_json(all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
             data_core.insert_message(all_data, key_deals, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
-        if data and data_core.check_difference_columns(
-            all_data, eng_table_name, list_columns_db, list(data[0].keys()), key_deals,
-        ):
+        if data and data_core.check_difference_columns(all_data, list_columns_db, list(data[0].keys()), key_deals):
             raise AssertionError("Stop consuming because columns is different")
 
     @staticmethod
@@ -316,7 +318,6 @@ class Receive:
         else:
             self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
             self.table_name = rus_table_name
-            self.write_to_json(all_data, rus_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors")
         return all_data, data, data_core, key_deals
 
     def write_to_json(
@@ -381,6 +382,8 @@ class Receive:
                 self.logger.error(f"Ошибка обработки: {e}")
                 self.message_errors.append(self._parse_message(body)[2])
                 self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                self.queue_name_errors.append(queue_name)
+                self.send_stats()
                 break
 
     def main(self):
@@ -398,7 +401,8 @@ class Receive:
         try:
             while True:
                 for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):
-                    self.process_queue(queue_name)
+                    if queue_name not in self.queue_name_errors:
+                        self.process_queue(queue_name)
                 time_.sleep(delay)
         except Exception as ex_:
             self.logger.error(f"Error: {ex_}")

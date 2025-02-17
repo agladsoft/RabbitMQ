@@ -4,8 +4,8 @@ import json
 import contextlib
 from typing import TYPE_CHECKING
 from typing import Union, Optional
+from scripts.__init__ import LOG_TABLE
 from datetime import datetime, date, timedelta
-from scripts.__init__ import get_my_env_var, LOG_TABLE
 
 if TYPE_CHECKING:
     from scripts.receive import Receive
@@ -133,8 +133,10 @@ class DataCoreClient:
                     date_file: Union[datetime.date, datetime] = datetime.strptime(date_, date_format).date()
                     date_db_access: Union[datetime.date, datetime] = datetime.strptime("1925-01-01", "%Y-%m-%d").date()
                 else:
-                    date_file = datetime.strptime(date_, date_format)
-                    date_db_access = datetime.strptime("1925-01-01", "%Y-%m-%d")
+                    utc: pytz.timezone = pytz.utc
+                    date_file = utc.localize(datetime.strptime(date_, date_format))
+                    date_db_access = utc.localize(datetime.strptime("1925-01-01", "%Y-%m-%d"))
+
                 if date_file < date_db_access:
                     data[self.original_date_string] += f"({column}: {date_file})\n"
                     return date_db_access
@@ -180,7 +182,6 @@ class DataCoreClient:
     def check_difference_columns(
         self,
         all_data: dict,
-        eng_table_name: str,
         list_columns_db: list,
         list_columns_rabbit: list,
         key_deals: str
@@ -195,7 +196,6 @@ class DataCoreClient:
         If there are no differences in columns, it returns an empty list.
 
         :param all_data: A dictionary with data to be processed.
-        :param eng_table_name: A string representing the English name of the table.
         :param list_columns_db: A list of column names present in the database.
         :param list_columns_rabbit: A list of column names present in the RabbitMQ message.
         :param key_deals: A string identifier for key deals.
@@ -207,10 +207,6 @@ class DataCoreClient:
             self.receive.logger.error(
                 f"The difference in columns {diff_db} from the database. "
                 f"The difference in columns {diff_rabbit} from the rabbit"
-            )
-            self.receive.message_errors.append(key_deals)
-            self.receive.write_to_json(
-                all_data, eng_table_name, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
             )
             self.insert_message(all_data, key_deals, is_success_inserted=False)
             return diff_db + diff_rabbit
@@ -294,11 +290,8 @@ class DataCoreClient:
             self.insert_message(all_data, key_deals, is_success_inserted=True)
         except Exception as ex:
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            self.receive.message_errors.append(key_deals)
-            self.receive.write_to_json(
-                all_data, self.table, dir_name=f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/errors"
-            )
             self.insert_message(all_data, key_deals, is_success_inserted=False)
+            raise ConnectionError(ex) from ex
 
     def update_status(self, key_deals: str) -> None:
         """

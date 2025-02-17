@@ -421,7 +421,7 @@ def test_datacore_check_difference_columns(
     :return: None
     """
     result = datacore_client_instance.check_difference_columns(
-        all_data, "table", db_columns, rabbit_columns, "key"
+        all_data, db_columns, rabbit_columns, "key"
     )
     assert result == expected
 
