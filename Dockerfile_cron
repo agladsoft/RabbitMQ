@@ -4,8 +4,6 @@ ARG XL_IDP_PATH_DOCKER
 
 ENV XL_IDP_PATH_DOCKER=${XL_IDP_PATH_DOCKER}
 
-ENV PYTHONPATH="${XL_IDP_ROOT_RABBITMQ}:${PYTHONPATH}"
-
 # Install Cron
 RUN apt-get update && apt-get -y install cron
 
