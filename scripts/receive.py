@@ -84,8 +84,8 @@ class Receive:
 
         :return:
         """
-        stats = self.load_stats()
-        today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        stats: dict = self.load_stats()
+        today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if self.queue_name not in stats:
             stats[self.queue_name] = {
                 "timestamp": today,
