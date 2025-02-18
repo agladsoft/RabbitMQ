@@ -181,6 +181,7 @@ class Receive:
             f"🔢 Количество сообщений: {self.count_message}\n"
             f"🚨 Количество ошибок: {len(self.message_errors)}\n"
             f"⚠️ Ошибки: `{self.message_errors}`"
+            f"\n"
         )[:4090]
         self.logger.info(message)
         if not self.message_errors:
