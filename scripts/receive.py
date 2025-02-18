@@ -180,7 +180,7 @@ class Receive:
             f"📊 Обработанная таблица: `{self.table_name}`\n"
             f"🔢 Количество сообщений: {self.count_message}\n"
             f"🚨 Количество ошибок: {len(self.message_errors)}\n"
-            f"⚠️  Ошибки: `{self.message_errors}`"
+            f"⚠️  Ошибки: {self.message_errors}"
         )[:4090]
         self.logger.info(message)
         if not self.message_errors:
