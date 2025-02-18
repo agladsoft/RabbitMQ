@@ -15,4 +15,4 @@ def read_file(file_path='') -> bytes:
 if __name__ == '__main__':
     rabbit_mq = RabbitMQ()
     data_file = read_file("/home/timur/PycharmWork/RabbitMQ/test_deal.json")
-    rabbit_mq.publish("DC_ACCOUNTING_DOCUMENTS_REQUESTS_QUEUE", "DC_ACCOUNTING_DOCUMENTS_REQUESTS_RT", data_file)
+    rabbit_mq.publish("DC_ACCOUNTING_DOCUMENTS_REQUESTS_QUEUE_TEST", "DC_ACCOUNTING_DOCUMENTS_REQUESTS_RT", data_file)

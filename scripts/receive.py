@@ -347,8 +347,8 @@ class Receive:
         if not os.path.exists(fle.parent):  # Проверяем, существует ли директория
             os.makedirs(fle.parent)  # Создаем директорию, если не существует
 
-        with open(file_name, 'w') as file:
-            json.dump(msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
+        with open(file_name, 'w') as f:
+            json.dump(msg, f, indent=4, ensure_ascii=False, default=serialize_datetime)
 
         return file_name
 
