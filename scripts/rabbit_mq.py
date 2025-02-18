@@ -43,6 +43,20 @@ class RabbitMQ:
         if self.connection and not self.connection.is_closed:
             self.connection.close()
 
+    def declare_and_bind_queue(self, queue_name: str, routing_key: str) -> None:
+        """
+        Создаёт очередь (если её нет) и привязывает её к exchange.
+
+        :param queue_name: Название очереди.
+        :param routing_key: Routing key для привязки.
+        """
+        self.channel.queue_declare(queue=queue_name, durable=True)
+        self.channel.queue_bind(
+            exchange=self.exchange_name,
+            queue=queue_name,
+            routing_key=routing_key
+        )
+
     def consume(self, queue_name: str, callback: callable) -> None:
         """
         Subscribes to messages in a RabbitMQ queue and calls the provided callback function
@@ -81,8 +95,10 @@ class RabbitMQ:
         """
         if not self.channel:
             raise ConnectionError("Connection is not established.")
-        self.channel.exchange_declare(exchange=self.exchange_name, durable=True)
-        self.channel.queue_declare(queue=queue_name, durable=True)
+
+        # Объявляем очередь и привязываем её перед отправкой
+        self.declare_and_bind_queue(queue_name, routing_key)
+
         self.channel.basic_publish(
             exchange=self.exchange_name,
             routing_key=routing_key,

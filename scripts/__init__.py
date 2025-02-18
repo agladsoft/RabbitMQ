@@ -88,7 +88,7 @@ def get_my_env_var(var_name: str) -> str:
 LOG_DIR_NAME: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
 LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.json"
 with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/queues_config.json", "r", encoding="utf-8") as file:
-    QUEUES_AND_ROUTING_KEYS = json.load(file)
+    QUEUES_AND_ROUTING_KEYS: dict = json.load(file)
 
 
 def get_file_handler(name: str) -> logging.FileHandler:

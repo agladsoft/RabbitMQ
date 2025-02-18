@@ -175,8 +175,10 @@ class Receive:
             return
 
         message: str = (
+            f"\n"
             f"📥 Очередь: `{self.queue_name}` пустая\n"
             f"📊 Обработанная таблица: `{self.table_name}`\n"
+            f"🔢 Количество сообщений: {self.count_message}\n"
             f"🚨 Количество ошибок: {len(self.message_errors)}\n"
             f"⚠️ Ошибки: `{self.message_errors}`"
         )[:4090]
@@ -388,21 +390,26 @@ class Receive:
 
     def main(self):
         """
-        This method is the main entry point of the script. It processes messages from
-        the queues listed in the QUEUES_AND_ROUTING_KEYS dictionary.
+        The main method of the script. Process messages from all queues in `QUEUES_AND_ROUTING_KEYS'.
 
-        It runs an infinite loop, where it processes all queues, then waits for 60
-        seconds before starting again. If an exception is encountered, it logs the
-        error and closes the RabbitMQ connection.
+        1. In the first cycle, announces and binds all queues once.
+        2. In the second cycle, it infinitely processes messages from these queues.
+        3. If an error occurs, logs it and closes the connection.
 
         :return:
         """
         delay: int = 60
         try:
+            # 1. Создаём и привязываем очереди один раз
+            for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
+                self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+
+            # 2. Основной цикл обработки сообщений
             while True:
-                for queue_name in set(QUEUES_AND_ROUTING_KEYS.keys()):
+                for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
                     if queue_name not in self.queue_name_errors:
                         self.process_queue(queue_name)
+
                 time_.sleep(delay)
         except Exception as ex_:
             self.logger.error(f"Error: {ex_}")
