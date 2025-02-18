@@ -1,4 +1,3 @@
-import json
 import requests
 from scripts.__init__ import *
 
@@ -27,8 +26,8 @@ def send_message():
     logger.info("Send message to telegram")
     message: str = "Не было сообщений"
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'r') as file:
-            logs: dict = json.load(file)
+        with open(LOG_FILE, 'r') as f:
+            logs: dict = json.load(f)
         if isinstance(logs, dict):
             total_lines: int = 0
             message = handle_message(logs, message, total_lines)
