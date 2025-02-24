@@ -419,36 +419,34 @@ class Receive:
 
 CLASSES: list = [
     # Данные по DC
-    CounterParties,
-    DataCoreFreight,
-    NaturalIndicatorsContractsSegments,
-    OrdersReport,
+    AccountingDocumentsRequests,
+    Accounts,
+    AutoVisits,
     AutoPickupGeneralReport,
-    TransportUnits,
+    CompletedRepackagesReport,
     Consignments,
-    SalesPlan,
-    NaturalIndicatorsTransactionFactDate,
+    CounterParties,
+    DailySummary,
+    DataCoreFreight,
     DevelopmentCounterpartyDepartment,
     ExportBookings,
-    ImportBookings,
-    CompletedRepackagesReport,
-    AutoVisits,
-    AccountingDocumentsRequests,
-    DailySummary,
-    RZHDOperationsReport,
-    OrdersMarginalityReport,
-    NaturalIndicatorsRailwayReceptionDispatch,
-    Accounts,
     FreightRates,
+    ImportBookings,
     MarginalityOrdersActDate,
-    RusconProducts,
+    NaturalIndicatorsContractsSegments,
+    NaturalIndicatorsTransactionFactDate,
+    NaturalIndicatorsRailwayReceptionDispatch,
+    OrdersMarginalityReport,
+    OrdersReport,
     ReferenceLocations,
+    RusconProducts,
+    RZHDOperationsReport,
+    SalesPlan,
     TerminalsCapacity,
+    TransportUnits,
 
-    # Данные по оценкам менеджеров
+    # Данные по DO
     ManagerEvaluation,
-
-    # Данные по справочнику контрагентов
     ReferenceCounterparties
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
