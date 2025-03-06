@@ -6,9 +6,13 @@ import pytest
 import tempfile
 from typing import Union, Any
 from pathlib import PosixPath
-from scripts.receive import Receive
 from unittest.mock import MagicMock
 from datetime import date, datetime, time
+
+os.environ['XL_IDP_PATH_RABBITMQ'] = '../.'
+os.environ['XL_IDP_ROOT_RABBITMQ'] = '../.'
+
+from scripts.receive import Receive
 from scripts.tables import RZHDOperationsReport, DataCoreClient
 
 # Пример тела сообщения RabbitMQ
