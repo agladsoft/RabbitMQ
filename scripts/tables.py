@@ -345,6 +345,7 @@ class DataCoreClient:
         try:
             self.receive.client.close()
             self.receive.logger.info("Success disconnect clickhouse")
+            return None
         except AttributeError:  # isn't closable
             self.receive.logger.info("Not closable")
             return True

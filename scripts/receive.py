@@ -17,7 +17,7 @@ from pika.adapters.blocking_connection import BlockingChannel
 class Receive:
     def __init__(self, log_file: str = LOG_FILE):
         self.logger: logging.getLogger = get_logger(
-            os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
+            str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
@@ -157,6 +157,7 @@ class Receive:
                 time_.sleep(30 * (2 ** attempt))  # Exponential backoff: 30s, 60s, 120s
 
         self.logger.error("Couldn't send a message after 3 attempts")
+        return None
 
     def send_stats(self) -> Optional[requests.Response]:
         """
@@ -172,7 +173,7 @@ class Receive:
                  None otherwise, or if no errors occurred or no messages were processed.
         """
         if self.count_message == 0:
-            return
+            return None
 
         message: str = (
             f"\n"
@@ -185,7 +186,7 @@ class Receive:
         self.logger.info(message)
         if not self.message_errors:
             self.update_stats()
-            return
+            return None
 
         self.message_errors = []
         return self._send_with_retries(message)
@@ -214,7 +215,7 @@ class Receive:
         self._check_and_update_log()
         self.count_message += 1
         self.logger: logging.getLogger = get_logger(
-            os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date())
+            str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.logger.info(
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "

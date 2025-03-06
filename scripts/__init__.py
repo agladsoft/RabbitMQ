@@ -32,8 +32,12 @@ with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/tables_config.json",
 def get_file_handler(name: str) -> logging.FileHandler:
     if not os.path.exists(LOG_DIR_NAME):
         os.mkdir(LOG_DIR_NAME)
-    file_handler = RotatingFileHandler(filename=f"{LOG_DIR_NAME}/{name}.log", mode='a', maxBytes=20.5 * pow(1024, 2),
-                                       backupCount=100)
+    file_handler = RotatingFileHandler(
+        filename=f"{LOG_DIR_NAME}/{name}.log",
+        mode='a',
+        maxBytes=20 * pow(1024, 2),
+        backupCount=100
+    )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
 
