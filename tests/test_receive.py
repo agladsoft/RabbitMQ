@@ -1,4 +1,5 @@
 import os
+import pytz
 import copy
 import json
 import pytest
@@ -358,7 +359,7 @@ def test_datacore_convert_to_lowercase(datacore_client_instance: DataCoreClient,
     (
             {"date": "01.01.2023 12:53:58", "date2": "01.01.2023T12:53:58"},
             {"date_columns": ["date", "date2"], "is_datetime": True},
-            {"date": datetime(2023, 1, 1, 12, 53, 58), "date2": datetime(2023, 1, 1, 12, 53, 58)}
+            {"date": datetime(2023, 1, 1, 12, 53, 58, tzinfo=pytz.UTC), "date2": datetime(2023, 1, 1, 12, 53, 58, tzinfo=pytz.UTC)}
     ),
     (
             {"status": "да", "status2": "Да", "status3": "нет", "status4": "Нет"},
@@ -428,7 +429,9 @@ def test_datacore_check_difference_columns(
 
 @pytest.mark.parametrize("date_string, is_datetime, expected", [
     ("01.01.2023T12:53:58", False, date(2023, 1, 1)),
-    ("01.01.2023T12:53:58", True, datetime(2023, 1, 1, 12, 53, 58)),
+    ("01.01.2023T12:53:58", True, datetime(
+        2023, 1, 1, 12, 53, 58, tzinfo=pytz.UTC
+    )),
     ("2023-01-01T12:53:58", False, date(2023, 1, 1)),
     ("2023-01-01", False, date(2023, 1, 1)),
     ("1912-12-31", False, date(1925, 1, 1)),
