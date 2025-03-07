@@ -1,0 +1,282 @@
+@startuml
+package "receive_py" {
+
+    class Receive {
+        -logger: logging.getLogger
+        -log_file: str
+        -rabbit_mq: RabbitMQ
+        -client: Client
+        -count_message: int
+        -is_greater_time: bool
+        -queue_name: str
+        -table_name: str
+        -message_errors: list
+        +connect_to_db()
+        +load_stats() dict
+        +save_stats(stats: dict)
+        +update_stats()
+        +_check_and_update_log(current_time: time, required_time: time, time_sleep: int) bool
+        +_send_with_retries(message: str) Optional[requests.Response]
+        +send_stats() Optional[requests.Response]
+        +callback(ch, method, properties, body)
+        +process_data(all_data: dict, data, data_core, eng_table_name: str, key_deals: str)
+        +_parse_message(msg) Tuple[dict, str, str]
+        +handle_incoming_json(msg) Tuple[dict, list, Any, str]
+        +write_to_json(msg: dict, eng_table_name: str, dir_name: str) str
+        +process_queue(queue_name: str)
+        +main()
+    }
+
+
+
+    class JsonEncoder {
+        default(self, obj)
+    }
+
+}
+
+Receive --> JsonEncoder : uses
+@enduml
+
+
+@startuml
+participant Receive as receive
+participant RabbitMQ as rabbitmq
+participant DataCore as data_core
+
+activate receive
+receive->>rabbitmq: get(queue_name)
+activate rabbitmq
+rabbitmq-->>receive: message
+deactivate rabbitmq
+receive->>receive: callback(ch, method, properties, body)
+activate receive
+receive->>receive: handle_incoming_json(body)
+activate receive
+receive->>receive: _parse_message(body)
+activate receive
+receive-->>receive: all_data, rus_table_name, key_deals
+deactivate receive
+receive->>receive: process_data(all_data, data, data_core, eng_table_name, key_deals)
+activate receive
+receive->>data_core: handle_rows(all_data, data, key_deals)
+activate data_core
+data_core-->>receive:
+deactivate data_core
+deactivate receive
+deactivate receive
+receive->>rabbitmq: basic_ack(delivery_tag)
+activate rabbitmq
+deactivate rabbitmq
+deactivate receive
+@enduml
+
+
+@startuml
+allow_mixing
+package "tables_py" {
+    left to right direction
+    class DataCoreClient {
+        -receive: Receive
+        -removed_columns_db: list
+        -_original_date_string: str
+        +database: str
+        +deal: str
+        +table: str
+        +original_date_string: str
+        +change_columns(data: dict, *args, **kwargs)
+        +convert_format_date(date_: str, data: dict, column, is_datetime: bool) Union[datetime, str]
+        +add_new_columns(data: dict, file_name: str, original_date_string: str)
+        +convert_to_lowercase(data: dict) dict
+        +check_difference_columns(all_data: dict, eng_table_name: str, list_columns_db: list, list_columns_rabbit: list, key_deals: str) list
+        +get_table_columns() list
+        +insert_message(all_data: dict, key_deals: str, is_success_inserted: bool)
+        +handle_rows(all_data, data: list, key_deals: str)
+        +update_status(key_deals: str)
+        +delete_old_deals(cond: str)
+    }
+    class DataCoreFreight {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class NaturalIndicatorsContractsSegments {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class CounterParties
+    class OrdersReport {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class AutoPickupGeneralReport {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class TransportUnits
+    class Consignments {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class SalesPlan {
+        +change_columns(*args, **kwargs)
+    }
+    class NaturalIndicatorsTransactionFactDate {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class DevelopmentCounterpartyDepartment {
+        +change_columns(*args, **kwargs)
+    }
+    class ExportBookings {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class ImportBookings {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class CompletedRepackagesReport {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class AutoVisits {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class AccountingDocumentsRequests {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class DailySummary {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class RZHDOperationsReport {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class OrdersMarginalityReport {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class NaturalIndicatorsRailwayReceptionDispatch {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class Accounts {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class FreightRates {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class MarginalityOrdersActDate {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class RusconProducts {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class ReferenceLocations {
+        +change_columns(*args, **kwargs)
+    }
+    class TerminalsCapacity {
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class ManagerEvaluation {
+        +database: str
+        +original_date_string: str
+        +change_columns(*args, **kwargs)
+    }
+    class ReferenceCounterparties {
+        +database: str
+        +change_columns(*args, **kwargs)
+    }
+    DataCoreFreight --> DataCoreClient
+    NaturalIndicatorsContractsSegments --> DataCoreClient
+    CounterParties --> DataCoreClient
+    OrdersReport --> DataCoreClient
+    AutoPickupGeneralReport --> DataCoreClient
+    TransportUnits --> DataCoreClient
+    Consignments --> DataCoreClient
+    SalesPlan --> DataCoreClient
+    NaturalIndicatorsTransactionFactDate --> DataCoreClient
+    DevelopmentCounterpartyDepartment --> DataCoreClient
+    ExportBookings --> DataCoreClient
+    ImportBookings --> DataCoreClient
+    CompletedRepackagesReport --> DataCoreClient
+    AutoVisits --> DataCoreClient
+    AccountingDocumentsRequests --> DataCoreClient
+    DailySummary --> DataCoreClient
+    RZHDOperationsReport --> DataCoreClient
+    OrdersMarginalityReport --> DataCoreClient
+    NaturalIndicatorsRailwayReceptionDispatch --> DataCoreClient
+    Accounts --> DataCoreClient
+    FreightRates --> DataCoreClient
+    MarginalityOrdersActDate --> DataCoreClient
+    RusconProducts --> DataCoreClient
+    ReferenceLocations --> DataCoreClient
+    TerminalsCapacity --> DataCoreClient
+    ManagerEvaluation --> DataCoreClient
+    ReferenceCounterparties --> DataCoreClient
+}
+
+package "receive_py" {
+
+    class Receive {
+        -logger: logging.getLogger
+        -log_file: str
+        -rabbit_mq: RabbitMQ
+        -client: Client
+        -count_message: int
+        -is_greater_time: bool
+        -queue_name: str
+        -table_name: str
+        -message_errors: list
+        +connect_to_db()
+        +load_stats() dict
+        +save_stats(stats: dict)
+        +update_stats()
+        +_check_and_update_log(current_time: time, required_time: time, time_sleep: int) bool
+        +_send_with_retries(message: str) Optional[requests.Response]
+        +send_stats() Optional[requests.Response]
+        +callback(ch, method, properties, body)
+        +process_data(all_data: dict, data, data_core, eng_table_name: str, key_deals: str)
+        +_parse_message(msg) Tuple[dict, str, str]
+        +handle_incoming_json(msg) Tuple[dict, list, Any, str]
+        +write_to_json(msg: dict, eng_table_name: str, dir_name: str) str
+        +process_queue(queue_name: str)
+        +main()
+    }
+
+}
+
+DataCoreClient --> Receive
+
+queue Queue1
+queue Queue2
+queue Queue3
+queue Queue4
+queue Queue5
+queue Queue6
+queue Queue7
+queue Queue8
+queue Queue9
+queue Queue10
+queue ...
+
+Receive --> Queue1
+Receive --> Queue2
+Receive --> Queue3
+Receive --> Queue4
+Receive --> Queue5
+Receive --> Queue6
+Receive --> Queue7
+Receive --> Queue8
+Receive --> Queue9
+Receive --> Queue10
+Receive --> "..."
+@enduml

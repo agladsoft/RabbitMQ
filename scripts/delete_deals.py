@@ -1,10 +1,9 @@
-from abc import ABC
-from receive import DataCoreClient
+from scripts.receive import DataCoreClient, Receive
 
 
-class AllDeletedTables(DataCoreClient, ABC):
-    def __init__(self):
-        super().__init__()
+class AllDeletedTables(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
 
     def delete_table_logs(self) -> None:
         AllDeletedTables.table = "rmq_log"
@@ -12,4 +11,4 @@ class AllDeletedTables(DataCoreClient, ABC):
 
 
 if __name__ == "__main__":
-    AllDeletedTables().delete_table_logs()
+    AllDeletedTables(Receive()).delete_table_logs()
