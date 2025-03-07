@@ -1,6 +1,6 @@
 # START CRON JOB
 SHELL=/bin/sh
 PATH=/usr/local/bin:/usr/bin:/bin
-0 20 * * * export PYTHONPATH="${XL_IDP_ROOT_RABBITMQ}:${PYTHONPATH}" && python3 ${XL_IDP_PATH_DOCKER}/scripts/send2telegram.py > /proc/1/fd/1 2>/proc/1/fd/2
-0 21 * * * export PYTHONPATH="${XL_IDP_ROOT_RABBITMQ}:${PYTHONPATH}" && python3 ${XL_IDP_PATH_DOCKER}/scripts/delete_deals.py > /proc/1/fd/1 2>/proc/1/fd/2
+0 20 * * * export PYTHONPATH="${XL_IDP_PATH_DOCKER}:${PYTHONPATH}" && python3 ${XL_IDP_PATH_DOCKER}/scripts/send2telegram.py > /proc/1/fd/1 2>/proc/1/fd/2
+0 21 * * * export PYTHONPATH="${XL_IDP_PATH_DOCKER}:${PYTHONPATH}" && python3 ${XL_IDP_PATH_DOCKER}/scripts/delete_deals.py > /proc/1/fd/1 2>/proc/1/fd/2
 # END CRON JOB
