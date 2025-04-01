@@ -41,7 +41,8 @@ def send_message():
         "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
         "text": f"Статистика обработки сообщений за день с RabbitMQ на сервере {ip_server}:\n"
                 f"<blockquote expandable>{message}</blockquote>",
-        "parse_mode": "HTML"
+        "parse_mode": "HTML",
+        "reply_to_message_id": get_my_env_var('MESSAGE_ID')
     }
     url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
     response = requests.get(url, params=params)
