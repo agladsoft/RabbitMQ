@@ -4,8 +4,8 @@ import json
 import contextlib
 from typing import TYPE_CHECKING
 from typing import Union, Optional
-from scripts.__init__ import LOG_TABLE
 from datetime import datetime, date, timedelta
+from scripts.__init__ import LOG_TABLE, BATCH_SIZE
 
 if TYPE_CHECKING:
     from scripts.receive import Receive
@@ -184,7 +184,8 @@ class DataCoreClient:
         all_data: dict,
         list_columns_db: list,
         list_columns_rabbit: list,
-        key_deals: str
+        key_deals: str,
+        message_count: int
     ) -> list:
         """
         Checks the difference in columns between the database and RabbitMQ message.
@@ -199,6 +200,7 @@ class DataCoreClient:
         :param list_columns_db: A list of column names present in the database.
         :param list_columns_rabbit: A list of column names present in the RabbitMQ message.
         :param key_deals: A string identifier for key deals.
+        :param message_count: Queue message count.
         :return: A list of columns which are not present in either the database or the RabbitMQ message.
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
@@ -208,7 +210,7 @@ class DataCoreClient:
                 f"The difference in columns {diff_db} from the database. "
                 f"The difference in columns {diff_rabbit} from the rabbit"
             )
-            self.insert_message(all_data, key_deals, is_success_inserted=False)
+            self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             return diff_db + diff_rabbit
         return []
 
@@ -224,23 +226,17 @@ class DataCoreClient:
         described_table = self.receive.client.query(f"DESCRIBE TABLE {self.database}.{self.table}")
         return described_table.result_columns[0]
 
-    def insert_message(self, all_data: dict, key_deals: str, is_success_inserted: bool):
-        """
-        Inserts a message into the log table with metadata and the provided data.
-
-        This method truncates the 'data' field in 'all_data' to a maximum of 100 entries,
-        constructs a row with various metadata including the database, table, queue name,
-        key deals, and the success status, and then inserts this row into the specified
-        log table in 'DataCore' database.
-
-        :param all_data: A dictionary containing the data to be logged.
-        :param key_deals: A string identifier for the key deals.
-        :param is_success_inserted: A boolean flag indicating if the data insertion was successful.
-        :return:
-        """
+    def insert_message(
+        self,
+        all_data: dict,
+        key_deals: Union[str, list],
+        message_count: int,
+        is_success_inserted: bool
+    ) -> None:
         len_data: int = 100
         all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
-        rows = [[
+
+        row = [
             self.database,
             self.table,
             self.receive.queue_name,
@@ -248,17 +244,25 @@ class DataCoreClient:
             datetime.now(tz=TZ) + timedelta(hours=3),
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
-        ]]
-        columns = ["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
-        self.receive.client.insert(
-            table=LOG_TABLE,
-            database="DataCore",
-            data=rows,
-            column_names=columns,
-            settings={"async_insert": 1, "wait_for_async_insert": 1}
-        )
+        ]
 
-    def handle_rows(self, all_data, data: list, key_deals: str) -> None:
+        self._insert_log_message(row, message_count)
+
+
+    def _insert_log_message(self, row, message_count):
+        self.receive.log_message_buffer.append(row)
+
+        if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
+            self.receive.client.insert(
+                table=LOG_TABLE,
+                database="DataCore",
+                data=self.receive.log_message_buffer,
+                column_names=["database", "table", "queue", "key_id", "datetime", "is_success", "message"],
+                settings={"async_insert": 1, "wait_for_async_insert": 1}
+            )
+            self.receive.log_message_buffer = []
+
+    def handle_rows(self, all_data, data: list, key_deals: str, message_count: int) -> None:
         """
         Handles a list of rows to be inserted into the ClickHouse database.
 
@@ -272,57 +276,55 @@ class DataCoreClient:
         :param all_data: A dictionary containing the entire dataset to be processed.
         :param data: A list of data rows to be processed.
         :param key_deals: A string identifier for key deals.
+        :param message_count: Queue message count.
         :return: None
         """
         try:
-            self.update_status(key_deals)
-            rows = [list(row.values()) for row in data] if data else [[]]
-            columns = list(data[0]) if data else []
-            if rows and columns:
-                self.receive.client.insert(
-                    table=self.table,
-                    database=self.database,
-                    data=rows,
-                    column_names=columns,
-                    settings={"async_insert": 1, "wait_for_async_insert": 1}
-                )
+            self.receive.key_deals_buffer.append(key_deals)
+            if data:
+                columns = list(data[0].keys())
+                for row in data:
+                    self.receive.rows_buffer.append(list(row.values()))
+                if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
+                    self.update_status()
+                    self.receive.client.insert(
+                        table=self.table,
+                        database=self.database,
+                        data=self.receive.rows_buffer,
+                        column_names=columns,
+                        settings={"async_insert": 1, "wait_for_async_insert": 1}
+                    )
+                    self.receive.rows_buffer = []
+                    self.receive.key_deals_buffer = []
                 self.receive.logger.info("The data has been uploaded to the database")
-            self.insert_message(all_data, key_deals, is_success_inserted=True)
+            self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
         except Exception as ex:
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
-            self.insert_message(all_data, key_deals, is_success_inserted=False)
+            self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise ConnectionError(ex) from ex
 
-    def update_status(self, key_deals: str) -> None:
-        """
-        Updates the status of entries in the database where the sum of the 'sign' column is greater than zero.
+    def update_status(self) -> None:
+        if not self.receive.key_deals_buffer:  # Handle empty list
+            return
 
-        This method constructs a query to select UUIDs that have a sum of 'sign' greater than zero
-        for a given key deal. For these entries, it updates the 'sign' column to -1 and re-inserts
-        the modified rows into the database. The process is logged upon completion.
-
-        :param key_deals: A string identifier for key deals which is used to filter the database entries.
-        :return:
-        """
+        placeholders: str = ', '.join([f"'{key}'" for key in self.receive.key_deals_buffer])
         query: str = (
             f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
-            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} = '{key_deals}' "
+            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} IN ({placeholders}) "
             f"GROUP BY uuid HAVING SUM(sign) > 0"
             f")"
         )
         selected_query = self.receive.client.query(query)
         if rows_query := selected_query.result_rows:
-            list_rows: list = [
-                {column: -1 if column == 'sign' else value
-                 for value, column in zip(row, selected_query.column_names)}
-                for row in rows_query
-            ]
-            rows: list = [list(row.values()) for row in list_rows]
-            columns: list = list(list_rows[0].keys())
+            rows_buffer = []
+            columns = selected_query.column_names
+            for row in rows_query:
+                modified_row = {col: -1 if col == 'sign' else val for val, col in zip(row, columns)}
+                rows_buffer.append(list(modified_row.values()))
             self.receive.client.insert(
                 table=self.table,
                 database=self.database,
-                data=rows,
+                data=rows_buffer,
                 column_names=columns,
                 settings={"async_insert": 1, "wait_for_async_insert": 1}
             )
@@ -695,6 +697,22 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        """
+        Retrieves the column names of the specified table in the database.
+
+        This method queries the database to describe the structure of the table
+        and extracts the list of column names from the result.
+
+        :return: A list of column names in the specified table.
+        """
+        return [
+            'key_id', 'uuid', 'date', 'original_date_string', 'organization', 'terminal',
+            'client_uid', 'client', 'operation', 'is_empty', 'container_count', 'container_size',
+            'teu', 'internal_customs_transit', 'other_transportation', 'container_train',
+            'wagon_dispatch_count', 'original_file_parsed_on', 'sign', 'is_obsolete_date'
+        ]
 
 
 class Accounts(DataCoreClient):

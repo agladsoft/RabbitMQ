@@ -21,16 +21,18 @@ class Receive:
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
-        self.client: Optional[Client] = None
-        self.connect_to_db()
+        self.client: Optional[Client] = self.connect_to_db()
         self.count_message: int = 0
         self.is_greater_time: bool = False
         self.queue_name: Optional[str] = None
         self.table_name: Optional[str] = None
         self.message_errors: list = []
         self.queue_name_errors: list = []
+        self.key_deals_buffer: list = []
+        self.rows_buffer: list = []
+        self.log_message_buffer: list = []
 
-    def connect_to_db(self) -> None:
+    def connect_to_db(self) -> Optional[Client]:
         """
         Connect to ClickHouse database.
         Establish a connection to the ClickHouse database. This method is called once when the script starts.
@@ -45,7 +47,7 @@ class Receive:
             )
             client.query("SET allow_experimental_lightweight_delete=1")
             self.logger.info("Success connected to clickhouse")
-            self.client = client
+            return client
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
@@ -196,7 +198,8 @@ class Receive:
         ch: Union[BlockingChannel, str],
         method: Union[Basic.Deliver, str],
         properties: Union[BasicProperties, str],
-        body: Union[bytes, str]
+        body: Union[bytes, str],
+        message_count: int
     ) -> None:
         """
         Callback function to process messages from the queue.
@@ -210,28 +213,26 @@ class Receive:
         :param method: The delivery method of the message.
         :param properties: The properties of the message.
         :param body: The body of the message, which is expected to be in bytes or string format.
+        :param message_count: The count of messages in the queue.
         :return:
         """
         self._check_and_update_log()
         self.count_message += 1
-        self.logger: logging.getLogger = get_logger(
-            str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
-        )
         self.logger.info(
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
             f"Count messages is {self.count_message}"
         )
-        all_data, data, data_core, key_deals = self.handle_incoming_json(body)
+        all_data, data, data_core, key_deals = self.handle_incoming_json(body, message_count)
         if data_core:
-            data_core.handle_rows(all_data, data, key_deals)
+            data_core.handle_rows(all_data, data, key_deals, message_count)
         else:
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
-            data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
+            data_core_client(self).insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError(f"Not found table name in dictionary. Russian table is {self.table_name}")
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
-    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> None:
+    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str, message_count) -> None:
         """
         Processes the given data, converting it to the required format and structure.
 
@@ -246,6 +247,7 @@ class Receive:
         :param data_core: An instance of a data core class that provides methods for data manipulation.
         :param eng_table_name: A string representing the English name of the table.
         :param key_deals: A string identifier for key deals.
+        :param message_count: The count of messages in the queue.
         :return: A string representing the generated file name.
         :raises AssertionError: If there are errors in data conversion or column name discrepancies.
         """
@@ -262,9 +264,11 @@ class Receive:
                     data[i][original_date_string] = data[i][original_date_string].strip() or None
         except Exception as ex:
             self.logger.error(f"Error converting data types. Table: {eng_table_name}. Exception: {ex}")
-            data_core.insert_message(all_data, key_deals, is_success_inserted=False)
+            data_core.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
-        if data and data_core.check_difference_columns(all_data, list_columns_db, list(data[0].keys()), key_deals):
+        if data and data_core.check_difference_columns(
+            all_data, list_columns_db, list(data[0].keys()), key_deals, message_count
+        ):
             raise AssertionError("Stop consuming because columns is different")
 
     @staticmethod
@@ -280,13 +284,13 @@ class Receive:
         :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
                  and the key deals identifier as a string.
         """
-        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
-        all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
+        msg: str = msg.decode('utf-8-sig')
+        all_data: dict = json.loads(msg)
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def handle_incoming_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Any, str]:
+    def handle_incoming_json(self, msg: Union[bytes, str, dict], message_count: int) -> Tuple[dict, list, Any, str]:
         """
         Handles an incoming JSON message.
 
@@ -304,6 +308,7 @@ class Receive:
         original data to a file in the errors directory.
 
         :param msg: The message to be processed, which can be bytes, string, or dictionary.
+        :param message_count: The count of messages in the queue.
         :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
                  the name of the JSON file as a string (or None if the English table name is not found),
                  the data core instance (or None if the English table name is not found), and the key deals
@@ -312,12 +317,12 @@ class Receive:
         all_data, rus_table_name, key_deals = self._parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
-        data: list = copy.deepcopy(all_data).get("data", [])
+        data: list = list(all_data.get("data", []))
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core(self)
-            self.process_data(all_data, data, data_core, eng_table_name, key_deals)
+            self.process_data(all_data, data, data_core, eng_table_name, key_deals, message_count)
         else:
             self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
             self.table_name = rus_table_name
@@ -377,9 +382,10 @@ class Receive:
                 break
 
             self.logger.info(f"Got message with queue_name: {queue_name}")
-
+            queue_info = self.rabbit_mq.channel.queue_declare(queue=queue_name, passive=True)
+            message_count = queue_info.method.message_count  # Количество сообщений в очереди
             try:
-                self.callback(self.rabbit_mq.channel, method_frame, header_frame, body)
+                self.callback(self.rabbit_mq.channel, method_frame, header_frame, body, message_count)
                 self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
@@ -420,35 +426,35 @@ class Receive:
 
 CLASSES: list = [
     # Данные по DC
-    AccountingDocumentsRequests,
-    Accounts,
-    AutoVisits,
-    AutoPickupGeneralReport,
-    CompletedRepackagesReport,
-    Consignments,
-    CounterParties,
-    DailySummary,
-    DataCoreFreight,
-    DevelopmentCounterpartyDepartment,
-    ExportBookings,
-    FreightRates,
-    ImportBookings,
-    MarginalityOrdersActDate,
-    NaturalIndicatorsContractsSegments,
-    NaturalIndicatorsTransactionFactDate,
+    # AccountingDocumentsRequests,
+    # Accounts,
+    # AutoVisits,
+    # AutoPickupGeneralReport,
+    # CompletedRepackagesReport,
+    # Consignments,
+    # CounterParties,
+    # DailySummary,
+    # DataCoreFreight,
+    # DevelopmentCounterpartyDepartment,
+    # ExportBookings,
+    # FreightRates,
+    # ImportBookings,
+    # MarginalityOrdersActDate,
+    # NaturalIndicatorsContractsSegments,
+    # NaturalIndicatorsTransactionFactDate,
     NaturalIndicatorsRailwayReceptionDispatch,
-    OrdersMarginalityReport,
-    OrdersReport,
-    ReferenceLocations,
-    RusconProducts,
-    RZHDOperationsReport,
-    SalesPlan,
-    TerminalsCapacity,
-    TransportUnits,
-
-    # Данные по DO
-    ManagerEvaluation,
-    ReferenceCounterparties
+    # OrdersMarginalityReport,
+    # OrdersReport,
+    # ReferenceLocations,
+    # RusconProducts,
+    # RZHDOperationsReport,
+    # SalesPlan,
+    # TerminalsCapacity,
+    # TransportUnits,
+    #
+    # # Данные по DO
+    # ManagerEvaluation,
+    # ReferenceCounterparties
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
