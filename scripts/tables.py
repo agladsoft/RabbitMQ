@@ -321,7 +321,7 @@ class DataCoreClient:
         the row to the deduped_buffer list as well. Finally, we reverse the deduped_buffer list
         to maintain the original order of the rows.
 
-        :return: A list of deduplicated rows
+        :return: A list of deduplicated rows and columns
         """
         deduped_buffer: list = []
         seen_keys: dict = {}
