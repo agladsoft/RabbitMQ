@@ -255,9 +255,11 @@ class Receive:
         self.logger.info(f'Starting read json. Length of json: {len(data)}. Table: {eng_table_name}')
         list_columns_db = list(set(data_core.get_table_columns()) - set(data_core.removed_columns_db))
         original_date_string: str = data_core.original_date_string
+        lowercase_data: bool = isinstance(data_core, FreightRates)
         try:
             for i in range(len(data)):
-                data[i] = data_core.convert_to_lowercase(data[i])
+                if lowercase_data:
+                    data[i] = data_core.convert_to_lowercase(data[i])
                 data_core.add_new_columns(data[i], file_name, original_date_string)
                 data_core.change_columns(data=data[i])
                 if original_date_string:
