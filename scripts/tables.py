@@ -290,7 +290,7 @@ class DataCoreClient:
             self.receive.key_deals_buffer.append(key_deals)
             for row in data:
                 self.receive.rows_buffer.append(row)
-            if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 9997:
+            if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
                 self.update_status()
                 columns, deduped_buffer = self.dedupe_rows_buffer()
                 if columns and deduped_buffer:
