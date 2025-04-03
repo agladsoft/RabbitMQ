@@ -340,14 +340,11 @@ class DataCoreClient:
 
     def update_status(self) -> None:
         """
-        Updates the status of deals in the database table.
+        Updates the status of the records in the database.
 
-        This method checks the key deals buffer for unique keys and constructs
-        an SQL query to select rows from the database table based on those keys.
-        It then modifies the 'sign' column of the selected rows to -1, indicating
-        a status update, and inserts the modified rows back into the database. If
-        the key deals buffer is empty, the method returns immediately without
-        performing any operations.
+        If the key_deals_buffer is not empty, it will be chunked into smaller pieces
+        and the database will be queried for each chunk. The results of the query
+        will be inserted back into the database with the sign column set to -1.
 
         :return: None
         """
