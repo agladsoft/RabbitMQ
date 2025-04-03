@@ -5,7 +5,7 @@ import contextlib
 from datetime import datetime, date, timedelta
 from scripts.__init__ import LOG_TABLE, BATCH_SIZE
 from clickhouse_connect.driver.query import QueryResult
-from typing import TYPE_CHECKING, Tuple, Union, Optional, List
+from typing import TYPE_CHECKING, Tuple, Union, Optional, List, Any
 
 if TYPE_CHECKING:
     from scripts.receive import Receive
@@ -290,7 +290,7 @@ class DataCoreClient:
             self.receive.key_deals_buffer.append(key_deals)
             for row in data:
                 self.receive.rows_buffer.append(row)
-            if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
+            if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 9997:
                 self.update_status()
                 columns, deduped_buffer = self.dedupe_rows_buffer()
                 if columns and deduped_buffer:
@@ -339,30 +339,45 @@ class DataCoreClient:
         return columns, list(reversed(deduped_buffer))
 
     def update_status(self) -> None:
-        if not self.receive.key_deals_buffer:  # Handle empty list
+        """
+        Updates the status of deals in the database table.
+
+        This method checks the key deals buffer for unique keys and constructs
+        an SQL query to select rows from the database table based on those keys.
+        It then modifies the 'sign' column of the selected rows to -1, indicating
+        a status update, and inserts the modified rows back into the database. If
+        the key deals buffer is empty, the method returns immediately without
+        performing any operations.
+
+        :return: None
+        """
+        if not self.receive.key_deals_buffer:
             return
 
-        placeholders: str = ', '.join([f"'{key}'" for key in self.receive.key_deals_buffer])
-        query: str = (
-            f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
-            f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} IN ({placeholders}) "
-            f"GROUP BY uuid HAVING SUM(sign) > 0"
-            f")"
-        )
-        selected_query: QueryResult = self.receive.client.query(query)
-        if rows_query := selected_query.result_rows:
-            rows_buffer: list = []
-            columns: tuple = selected_query.column_names
-            for row in rows_query:
-                modified_row: dict = {col: -1 if col == 'sign' else val for val, col in zip(row, columns)}
-                rows_buffer.append(list(modified_row.values()))
-            self.receive.client.insert(
-                table=self.table,
-                database=self.database,
-                data=rows_buffer,
-                column_names=columns
+        chunk_size: int = 1000
+        for i in range(0, len(self.receive.key_deals_buffer), chunk_size):
+            chunk: list = self.receive.key_deals_buffer[i:i + chunk_size]
+            placeholders: str = ', '.join([f"'{key}'" for key in chunk])
+            query: str = (
+                f"SELECT * FROM {self.database}.{self.table} WHERE uuid IN ("
+                f"SELECT uuid FROM {self.database}.{self.table} WHERE {self.deal} IN ({placeholders}) "
+                f"GROUP BY uuid HAVING SUM(sign) > 0"
+                f")"
             )
-        self.receive.logger.info("Data processing in the database is completed")
+            selected_query: QueryResult = self.receive.client.query(query)
+            if rows_query := selected_query.result_rows:
+                rows_buffer: list = []
+                columns: tuple = selected_query.column_names
+                for row in rows_query:
+                    modified_row: dict = {col: -1 if col == 'sign' else val for val, col in zip(row, columns)}
+                    rows_buffer.append(list(modified_row.values()))
+                self.receive.client.insert(
+                    table=self.table,
+                    database=self.database,
+                    data=rows_buffer,
+                    column_names=columns
+                )
+            self.receive.logger.info("Data processing in the database is completed")
 
     def delete_old_deals(self, cond: str = "is_obsolete=true") -> None:
         """
@@ -377,7 +392,20 @@ class DataCoreClient:
         self.receive.client.query(f"DELETE FROM {self.database}.{self.table} WHERE {cond}")
         self.receive.logger.info(f"Successfully deleted old transaction data for table {self.database}.{self.table}")
 
-    def __exit__(self, exception_type, exception_val, trace):
+    def __exit__(self, exception_type: Any, exception_val: Any, trace: Any) -> Optional[bool]:
+        """
+        Handles the exit of the context manager, ensuring proper disconnection
+        from the ClickHouse client.
+
+        This method attempts to close the connection to the ClickHouse database
+        and logs the success of the disconnection. In the event that the client
+        is not closable, an AttributeError is caught and logged accordingly.
+
+        :param exception_type: The type of exception raised (if any).
+        :param exception_val: The value of the exception raised (if any).
+        :param trace: The traceback of the exception raised (if any).
+        :return: None if the client is closed successfully, True if the client is not closable.
+        """
         try:
             self.receive.client.close()
             self.receive.logger.info("Success disconnect clickhouse")
