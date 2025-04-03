@@ -256,7 +256,8 @@ class Receive:
         original_date_string: str = data_core.original_date_string
         try:
             for i in range(len(data)):
-                data[i] = data_core.convert_to_lowercase(data[i])
+                if isinstance(data_core, FreightRates):
+                    data[i] = data_core.convert_to_lowercase(data[i])
                 data_core.add_new_columns(data[i], file_name, original_date_string)
                 data_core.change_columns(data=data[i])
                 if original_date_string:
