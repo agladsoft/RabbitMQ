@@ -2,10 +2,10 @@ import re
 import pytz
 import json
 import contextlib
-from typing import TYPE_CHECKING
-from typing import Union, Optional
 from datetime import datetime, date, timedelta
 from scripts.__init__ import LOG_TABLE, BATCH_SIZE
+from clickhouse_connect.driver.query import QueryResult
+from typing import TYPE_CHECKING, Tuple, Union, Optional, List
 
 if TYPE_CHECKING:
     from scripts.receive import Receive
@@ -200,7 +200,7 @@ class DataCoreClient:
         :param list_columns_db: A list of column names present in the database.
         :param list_columns_rabbit: A list of column names present in the RabbitMQ message.
         :param key_deals: A string identifier for key deals.
-        :param message_count: Queue message count.
+        :param message_count: The count of messages in the queue.
         :return: A list of columns which are not present in either the database or the RabbitMQ message.
         """
         diff_db: list = list(set(list_columns_db) - set(list_columns_rabbit))
@@ -233,9 +233,22 @@ class DataCoreClient:
         message_count: int,
         is_success_inserted: bool
     ) -> None:
+        """
+        Inserts a message into the ClickHouse database.
+
+        This method takes a dictionary of data, a key deals identifier, the message count,
+        and a boolean indicating whether the message was successfully inserted into the
+        database. It logs the process and handles any exceptions that occur during data
+        insertion.
+
+        :param all_data: A dictionary with data to be logged.
+        :param key_deals: A string identifier for key deals.
+        :param message_count: The count of messages in the queue.
+        :param is_success_inserted: A boolean indicating whether the message was successfully inserted.
+        :return None:
+        """
         len_data: int = 100
         all_data["data"] = all_data["data"][:len_data] if len(all_data["data"]) >= len_data else all_data["data"]
-
         row = [
             self.database,
             self.table,
@@ -245,21 +258,15 @@ class DataCoreClient:
             is_success_inserted,
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]
-
-        self._insert_log_message(row, message_count)
-
-
-    def _insert_log_message(self, row, message_count):
         self.receive.log_message_buffer.append(row)
-
         if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
             self.receive.client.insert(
                 table=LOG_TABLE,
                 database="DataCore",
                 data=self.receive.log_message_buffer,
-                column_names=["database", "table", "queue", "key_id", "datetime", "is_success", "message"],
-                settings={"async_insert": 1, "wait_for_async_insert": 1}
+                column_names=["database", "table", "queue", "key_id", "datetime", "is_success", "message"]
             )
+            self.receive.rows_buffer = []
             self.receive.log_message_buffer = []
 
     def handle_rows(self, all_data, data: list, key_deals: str, message_count: int) -> None:
@@ -281,27 +288,55 @@ class DataCoreClient:
         """
         try:
             self.receive.key_deals_buffer.append(key_deals)
-            if data:
-                columns = list(data[0].keys())
-                for row in data:
-                    self.receive.rows_buffer.append(list(row.values()))
-                if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
-                    self.update_status()
+            for row in data:
+                self.receive.rows_buffer.append(row)
+            if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
+                self.update_status()
+                columns, deduped_buffer = self.dedupe_rows_buffer()
+                if columns and deduped_buffer:
                     self.receive.client.insert(
                         table=self.table,
                         database=self.database,
-                        data=self.receive.rows_buffer,
-                        column_names=columns,
-                        settings={"async_insert": 1, "wait_for_async_insert": 1}
+                        data=deduped_buffer,
+                        column_names=columns
                     )
-                    self.receive.rows_buffer = []
-                    self.receive.key_deals_buffer = []
+                self.receive.rabbit_mq.channel.basic_ack(delivery_tag=self.receive.delivery_tags[-1], multiple=True)
+                self.receive.key_deals_buffer = []
+                self.receive.delivery_tags = []
                 self.receive.logger.info("The data has been uploaded to the database")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
         except Exception as ex:
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise ConnectionError(ex) from ex
+
+    def dedupe_rows_buffer(self) -> Tuple[list, List[list]]:
+        """
+        Deduplicates the rows buffer using the key_id and original_file_parsed_on columns.
+
+        We iterate over the buffer in reverse order, so the most recent rows are checked first.
+        If a row's key_id is not in the seen_keys dictionary, we add it to the dictionary and
+        append the row to the deduped_buffer list. If the key_id is already in the dictionary,
+        we check if the parsed_on date matches the one in the dictionary. If it does, we append
+        the row to the deduped_buffer list as well. Finally, we reverse the deduped_buffer list
+        to maintain the original order of the rows.
+
+        :return: A list of deduplicated rows
+        """
+        deduped_buffer: list = []
+        seen_keys: dict = {}
+        columns = list(self.receive.rows_buffer[0].keys()) if self.receive.rows_buffer else []
+        for row in reversed(self.receive.rows_buffer):  # Итерируемся с конца
+            key: str = row['key_id']
+            parsed_on: str = row['original_file_parsed_on']
+
+            if key not in seen_keys:
+                seen_keys[key] = parsed_on
+                deduped_buffer.append(list(row.values()))
+            elif parsed_on == seen_keys[key]:
+                deduped_buffer.append(list(row.values()))  # Добавляем дубликат, если обе даты совпадают
+
+        return columns, list(reversed(deduped_buffer))
 
     def update_status(self) -> None:
         if not self.receive.key_deals_buffer:  # Handle empty list
@@ -314,19 +349,18 @@ class DataCoreClient:
             f"GROUP BY uuid HAVING SUM(sign) > 0"
             f")"
         )
-        selected_query = self.receive.client.query(query)
+        selected_query: QueryResult = self.receive.client.query(query)
         if rows_query := selected_query.result_rows:
-            rows_buffer = []
-            columns = selected_query.column_names
+            rows_buffer: list = []
+            columns: tuple = selected_query.column_names
             for row in rows_query:
-                modified_row = {col: -1 if col == 'sign' else val for val, col in zip(row, columns)}
+                modified_row: dict = {col: -1 if col == 'sign' else val for val, col in zip(row, columns)}
                 rows_buffer.append(list(modified_row.values()))
             self.receive.client.insert(
                 table=self.table,
                 database=self.database,
                 data=rows_buffer,
-                column_names=columns,
-                settings={"async_insert": 1, "wait_for_async_insert": 1}
+                column_names=columns
             )
         self.receive.logger.info("Data processing in the database is completed")
 

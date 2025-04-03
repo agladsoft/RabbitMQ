@@ -1,4 +1,3 @@
-import copy
 import requests
 import time as time_
 from pathlib import Path
@@ -31,12 +30,13 @@ class Receive:
         self.key_deals_buffer: list = []
         self.rows_buffer: list = []
         self.log_message_buffer: list = []
+        self.delivery_tags: list = []
 
     def connect_to_db(self) -> Optional[Client]:
         """
         Connect to ClickHouse database.
         Establish a connection to the ClickHouse database. This method is called once when the script starts.
-        :return:
+        :return: ClickHouse client.
         """
         try:
             client: Client = get_client(
@@ -139,7 +139,13 @@ class Receive:
 
     def _send_with_retries(self, message: str) -> Optional[requests.Response]:
         """
-        Try sending the message up to 3 times with exponential backoff.
+        Send a message to the Telegram bot with exponential backoff.
+
+        Send a message to the Telegram bot with exponential backoff in case of errors.
+        If the message couldn't be sent after 3 attempts, method returns None.
+
+        :param message: Message to be sent.
+        :return: Response from the Telegram API, or None if the message couldn't be sent.
         """
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
@@ -387,8 +393,8 @@ class Receive:
             queue_info = self.rabbit_mq.channel.queue_declare(queue=queue_name, passive=True)
             message_count = queue_info.method.message_count  # Количество сообщений в очереди
             try:
+                self.delivery_tags.append(method_frame.delivery_tag)
                 self.callback(self.rabbit_mq.channel, method_frame, header_frame, body, message_count)
-                self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
                 self.message_errors.append(self._parse_message(body)[2])
