@@ -51,18 +51,11 @@ class RabbitMQ:
         :param routing_key: Routing key для привязки.
         """
         self.channel.queue_declare(queue=queue_name, durable=True)
-        if "DC_QH_PROD_Q" in queue_name:
-            self.channel.queue_bind(
-                exchange="DC_QH_PROD_EX",
-                queue=queue_name,
-                routing_key=routing_key
-            )
-        else:
-            self.channel.queue_bind(
-                exchange=self.exchange_name,
-                queue=queue_name,
-                routing_key=routing_key
-            )
+        self.channel.queue_bind(
+            exchange=self.exchange_name,
+            queue=queue_name,
+            routing_key=routing_key
+        )
 
     def consume(self, queue_name: str, callback: callable) -> None:
         """
@@ -105,17 +98,9 @@ class RabbitMQ:
 
         # Объявляем очередь и привязываем её перед отправкой
         self.declare_and_bind_queue(queue_name, routing_key)
-
-        if "DC_QH_PROD_Q" in queue_name:
-            self.channel.basic_publish(
-                exchange="DC_QH_PROD_EX",
-                routing_key=routing_key,
-                body=message
-            )
-        else:
-            self.channel.basic_publish(
-                exchange=self.exchange_name,
-                routing_key=routing_key,
-                body=message
-            )
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key=routing_key,
+            body=message
+        )
         print(f"Sent message to queue {queue_name}: {message}")
