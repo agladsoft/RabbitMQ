@@ -6,9 +6,9 @@ from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
-os.environ['TOKEN_TELEGRAM'] = '6557326533:AAGcYU6q0DFLJfjZMHTaDjLnf-PzRMzA-6M'
-os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
-os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
+# os.environ['TOKEN_TELEGRAM'] = '6557326533:AAGcYU6q0DFLJfjZMHTaDjLnf-PzRMzA-6M'
+# os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
+# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
 
 
 def get_my_env_var(var_name: str) -> str:
