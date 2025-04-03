@@ -696,6 +696,14 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            'key_id', 'uuid', 'date', 'original_date_string', 'organization', 'terminal',
+            'client_uid', 'client', 'operation', 'is_empty', 'container_count', 'container_size',
+            'teu', 'internal_customs_transit', 'other_transportation', 'container_train',
+            'wagon_dispatch_count', 'original_file_parsed_on', 'sign', 'is_obsolete_date'
+        ]
+
 
 class Accounts(DataCoreClient):
     def __init__(self, receive: "Receive"):

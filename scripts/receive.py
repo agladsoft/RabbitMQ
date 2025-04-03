@@ -1,4 +1,3 @@
-import copy
 import requests
 import time as time_
 from pathlib import Path
@@ -21,8 +20,7 @@ class Receive:
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
-        self.client: Optional[Client] = None
-        self.connect_to_db()
+        self.client: Optional[Client] = self.connect_to_db()
         self.count_message: int = 0
         self.is_greater_time: bool = False
         self.queue_name: Optional[str] = None
@@ -30,7 +28,7 @@ class Receive:
         self.message_errors: list = []
         self.queue_name_errors: list = []
 
-    def connect_to_db(self) -> None:
+    def connect_to_db(self) -> Optional[Client]:
         """
         Connect to ClickHouse database.
         Establish a connection to the ClickHouse database. This method is called once when the script starts.
@@ -45,7 +43,7 @@ class Receive:
             )
             client.query("SET allow_experimental_lightweight_delete=1")
             self.logger.info("Success connected to clickhouse")
-            self.client = client
+            return client
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
@@ -137,7 +135,13 @@ class Receive:
 
     def _send_with_retries(self, message: str) -> Optional[requests.Response]:
         """
-        Try sending the message up to 3 times with exponential backoff.
+        Send a message to the Telegram chat with retries.
+
+        This method sends a message to the Telegram chat with retries.
+        If sending fails, method retries to send with exponential backoff: 30s, 60s, 120s.
+
+        :param message: Message to send.
+        :return: Response from Telegram API or None if all attempts failed.
         """
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
@@ -214,9 +218,6 @@ class Receive:
         """
         self._check_and_update_log()
         self.count_message += 1
-        self.logger: logging.getLogger = get_logger(
-            str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
-        )
         self.logger.info(
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
             f"Count messages is {self.count_message}"
@@ -280,8 +281,8 @@ class Receive:
         :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
                  and the key deals identifier as a string.
         """
-        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
-        all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
+        msg: str = msg.decode('utf-8-sig')
+        all_data: dict = json.loads(msg)
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
@@ -312,7 +313,7 @@ class Receive:
         all_data, rus_table_name, key_deals = self._parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
-        data: list = copy.deepcopy(all_data).get("data", [])
+        data: list = list(all_data.get("data", []))
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
@@ -420,35 +421,35 @@ class Receive:
 
 CLASSES: list = [
     # Данные по DC
-    AccountingDocumentsRequests,
-    Accounts,
-    AutoVisits,
-    AutoPickupGeneralReport,
-    CompletedRepackagesReport,
-    Consignments,
-    CounterParties,
-    DailySummary,
-    DataCoreFreight,
-    DevelopmentCounterpartyDepartment,
-    ExportBookings,
-    FreightRates,
-    ImportBookings,
-    MarginalityOrdersActDate,
-    NaturalIndicatorsContractsSegments,
-    NaturalIndicatorsTransactionFactDate,
+    # AccountingDocumentsRequests,
+    # Accounts,
+    # AutoVisits,
+    # AutoPickupGeneralReport,
+    # CompletedRepackagesReport,
+    # Consignments,
+    # CounterParties,
+    # DailySummary,
+    # DataCoreFreight,
+    # DevelopmentCounterpartyDepartment,
+    # ExportBookings,
+    # FreightRates,
+    # ImportBookings,
+    # MarginalityOrdersActDate,
+    # NaturalIndicatorsContractsSegments,
+    # NaturalIndicatorsTransactionFactDate,
     NaturalIndicatorsRailwayReceptionDispatch,
-    OrdersMarginalityReport,
-    OrdersReport,
-    ReferenceLocations,
-    RusconProducts,
-    RZHDOperationsReport,
-    SalesPlan,
-    TerminalsCapacity,
-    TransportUnits,
+    # OrdersMarginalityReport,
+    # OrdersReport,
+    # ReferenceLocations,
+    # RusconProducts,
+    # RZHDOperationsReport,
+    # SalesPlan,
+    # TerminalsCapacity,
+    # TransportUnits,
 
     # Данные по DO
-    ManagerEvaluation,
-    ReferenceCounterparties
+    # ManagerEvaluation,
+    # ReferenceCounterparties
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
