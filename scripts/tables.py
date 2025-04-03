@@ -229,7 +229,7 @@ class DataCoreClient:
     def insert_message(
         self,
         all_data: dict,
-        key_deals: Union[str, list],
+        key_deals: str,
         message_count: int,
         is_success_inserted: bool
     ) -> None:
@@ -259,7 +259,7 @@ class DataCoreClient:
             json.dumps(all_data, default=serialize_datetime, ensure_ascii=False, indent=2)
         ]
         self.receive.log_message_buffer.append(row)
-        if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0:
+        if len(self.receive.rows_buffer) >= BATCH_SIZE or message_count == 0 or not is_success_inserted:
             self.receive.client.insert(
                 table=LOG_TABLE,
                 database="DataCore",

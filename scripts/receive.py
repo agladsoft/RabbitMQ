@@ -398,8 +398,12 @@ class Receive:
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
                 self.message_errors.append(self._parse_message(body)[2])
-                self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                self.rabbit_mq.channel.basic_nack(delivery_tag=self.delivery_tags[-1], multiple=True)
                 self.queue_name_errors.append(queue_name)
+                self.key_deals_buffer: list = []
+                self.rows_buffer: list = []
+                self.log_message_buffer: list = []
+                self.delivery_tags: list = []
                 self.send_stats()
                 break
 
