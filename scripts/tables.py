@@ -549,8 +549,8 @@ class ImportBookings(DataCoreClient):
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
             data=kwargs.get('data'),
-            float_columns=kwargs.get('float_columns', []),
-            int_columns=['container_size', 'container_count', 'freight_rate', 'teu'],
+            float_columns=['freight_rate'],
+            int_columns=['container_size', 'container_count', 'teu'],
             date_columns=['etd', 'eta', 'booking_date', 'sob'],
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
