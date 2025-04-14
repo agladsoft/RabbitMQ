@@ -1,5 +1,6 @@
 import copy
 import requests
+import threading
 import time as time_
 from pathlib import Path
 from pika.spec import Basic
@@ -27,8 +28,13 @@ class Receive:
         self.is_greater_time: bool = False
         self.queue_name: Optional[str] = None
         self.table_name: Optional[str] = None
+        # Словари для хранения ошибок и счетчиков по каждой очереди
+        self.queue_stats: dict = {}
+        # Глобальные списки для сбора всех ошибок
         self.message_errors: list = []
         self.queue_name_errors: list = []
+        # Блокировка для безопасного доступа к общим ресурсам
+        self.lock = threading.Lock()
 
     def connect_to_db(self) -> None:
         """
@@ -159,36 +165,95 @@ class Receive:
         self.logger.error("Couldn't send a message after 3 attempts")
         return None
 
-    def send_stats(self) -> Optional[requests.Response]:
+    def send_queue_stats(self, queue_name: str) -> Optional[requests.Response]:
         """
-        Send statistics to Telegram.
+        Send statistics for a specific queue to Telegram.
 
         Sends a message to a specified Telegram chat with statistics about the processed queue.
         The message includes the queue name, processed table, error count, and error details.
         The method attempts to send the message up to three times, with a 30-second delay
-        between attempts in case of failure.  If errors occurred during processing, they are
+        between attempts in case of failure. If errors occurred during processing, they are
         cleared after a successful send. If sending fails after three attempts, an error is logged.
 
+        :param queue_name: The name of the queue for which to send statistics
         :return: The response from the Telegram API if the message was sent successfully,
                  None otherwise, or if no errors occurred or no messages were processed.
         """
-        if self.count_message == 0:
+        # Получаем статистику для указанной очереди
+        stats = self.queue_stats.get(queue_name, {
+            'count_message': 0,
+            'message_errors': [],
+            'table_name': None,
+            'has_errors': False
+        })
+        
+        if stats['count_message'] == 0 and len(stats['message_errors']) == 0:
             return None
 
         message: str = (
             f"\n"
-            f"📥 Очередь: `{self.queue_name}` пустая\n"
-            f"📊 Обработанная таблица: `{self.table_name}`\n"
-            f"🔢 Количество сообщений: {self.count_message}\n"
+            f"📥 Очередь: `{queue_name}`\n"
+            f"📊 Обработанная таблица: `{stats['table_name']}`\n"
+            f"🔢 Количество сообщений: {stats['count_message']}\n"
+            f"🚨 Количество ошибок: {len(stats['message_errors'])}\n"
+            f"⚠️ Ошибки: `{stats['message_errors']}`"
+        )[:4090]
+        self.logger.info(message)
+        
+        # Обновляем статистику в лог-файле
+        if not stats['message_errors']:
+            self.update_stats()
+            return None
+
+        # Отправляем сообщение и очищаем ошибки
+        response = self._send_with_retries(message)
+        if response:
+            stats['message_errors'] = []
+            stats['has_errors'] = False
+        return response
+    
+    def update_global_error_lists(self):
+        """
+        Обновляет глобальные списки ошибок на основе статистики всех очередей.
+        Используется для обратной совместимости с существующим кодом.
+        """
+        self.message_errors = []
+        self.queue_name_errors = []
+        
+        for queue_name, stats in self.queue_stats.items():
+            if stats['has_errors']:
+                self.queue_name_errors.append(queue_name)
+                self.message_errors.extend(stats['message_errors'])
+    
+    def send_stats(self) -> Optional[requests.Response]:
+        """
+        Send statistics to Telegram for all queues.
+
+        This is a compatibility method that sends statistics for all queues.
+        It's recommended to use send_queue_stats for individual queue statistics.
+
+        :return: None
+        """
+        # Обновляем глобальные списки ошибок
+        self.update_global_error_lists()
+        
+        # Отправляем статистику для текущей очереди, если она установлена
+        if self.queue_name and self.queue_name in self.queue_stats:
+            return self.send_queue_stats(self.queue_name)
+        
+        # Если очередь не установлена, отправляем общую статистику
+        if self.count_message == 0 and len(self.message_errors) == 0:
+            return None
+
+        message: str = (
+            f"\n"
+            f"📥 Общая статистика очередей\n"
+            f"🔢 Общее количество сообщений: {self.count_message}\n"
             f"🚨 Количество ошибок: {len(self.message_errors)}\n"
             f"⚠️ Ошибки: `{self.message_errors}`"
         )[:4090]
         self.logger.info(message)
-        if not self.message_errors:
-            self.update_stats()
-            return None
-
-        self.message_errors = []
+        
         return self._send_with_retries(message)
 
     def callback(
@@ -213,22 +278,46 @@ class Receive:
         :return:
         """
         self._check_and_update_log()
-        self.count_message += 1
+        
+        # Обновляем логгер
         self.logger: logging.getLogger = get_logger(
             str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.logger.info(
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
-            f"Count messages is {self.count_message}"
+            f"Queue: {self.queue_name}"
         )
+        
+        # Обрабатываем сообщение
         all_data, data, data_core, key_deals = self.handle_incoming_json(body)
+        
+        # Обновляем информацию о таблице в статистике очереди
+        with self.lock:
+            if self.queue_name in self.queue_stats:
+                self.queue_stats[self.queue_name]['table_name'] = all_data.get("header", {}).get("report")
+        
         if data_core:
-            data_core.handle_rows(all_data, data, key_deals)
+            try:
+                data_core.handle_rows(all_data, data, key_deals)
+            except Exception as e:
+                self.logger.error(f"Error handling rows: {e}")
+                with self.lock:
+                    if self.queue_name in self.queue_stats:
+                        self.queue_stats[self.queue_name]['message_errors'].append(key_deals)
+                        self.queue_stats[self.queue_name]['has_errors'] = True
+                raise  # Re-raise the exception to be caught by the caller
         else:
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
             data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
-            raise AssertionError(f"Not found table name in dictionary. Russian table is {self.table_name}")
+            error_msg = f"Not found table name in dictionary. Russian table is {all_data.get('header', {}).get('report')}"
+            self.logger.error(error_msg)
+            with self.lock:
+                if self.queue_name in self.queue_stats:
+                    self.queue_stats[self.queue_name]['message_errors'].append(key_deals)
+                    self.queue_stats[self.queue_name]['has_errors'] = True
+            raise AssertionError(error_msg)
+            
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
     def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> None:
@@ -357,23 +446,36 @@ class Receive:
 
     def process_queue(self, queue_name: str) -> None:
         """
-        Processes a queue.
+        Processes a queue sequentially (legacy method).
 
         This method processes a queue by consuming messages from it and executing
         the callback function on each message. It also handles errors by logging
         them and re-queueing the message.
 
+        Note: This method is kept for backward compatibility. For parallel processing,
+        use process_queue_thread instead.
+
         :param queue_name: The name of the queue to be processed.
-        :return:
+        :return: None
         """
+        # Инициализируем статистику для этой очереди, если она еще не существует
+        with self.lock:
+            if queue_name not in self.queue_stats:
+                self.queue_stats[queue_name] = {
+                    'count_message': 0,
+                    'message_errors': [],
+                    'table_name': None,
+                    'has_errors': False
+                }
+        
         self.queue_name: str = queue_name
-        self.count_message: int = 0
 
         while True:
             method_frame, header_frame, body = self.rabbit_mq.get(queue_name)
 
             if not method_frame or method_frame.NAME == 'Basic.GetEmpty':
-                self.send_stats()
+                with self.lock:
+                    self.send_queue_stats(queue_name)
                 break
 
             self.logger.info(f"Got message with queue_name: {queue_name}")
@@ -381,39 +483,140 @@ class Receive:
             try:
                 self.callback(self.rabbit_mq.channel, method_frame, header_frame, body)
                 self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                with self.lock:
+                    self.queue_stats[queue_name]['count_message'] += 1
+                    self.count_message += 1  # Для обратной совместимости
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
-                self.message_errors.append(self._parse_message(body)[2])
+                error_key = self._parse_message(body)[2]
                 self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
-                self.queue_name_errors.append(queue_name)
-                self.send_stats()
+                with self.lock:
+                    self.queue_stats[queue_name]['message_errors'].append(error_key)
+                    self.queue_stats[queue_name]['has_errors'] = True
+                    self.queue_name_errors.append(queue_name)
+                    self.message_errors.append(error_key)  # Для обратной совместимости
+                    self.send_queue_stats(queue_name)
                 break
-
+    
+    def process_queue_thread(self, queue_name: str) -> None:
+        """
+        Обрабатывает очередь в отдельном потоке.
+        Этот метод запускается в отдельном потоке для каждой очереди.
+        
+        :param queue_name: Имя очереди для обработки
+        :return: None
+        """
+        try:
+            # Создаем отдельное подключение для каждого потока
+            thread_rabbit_mq = RabbitMQ()
+            thread_rabbit_mq.declare_and_bind_queue(queue_name, QUEUES_AND_ROUTING_KEYS[queue_name])
+            
+            self.logger.info(f"Начало обработки очереди {queue_name} в отдельном потоке")
+            
+            while True:
+                method_frame, header_frame, body = thread_rabbit_mq.get(queue_name)
+                
+                if not method_frame or method_frame.NAME == 'Basic.GetEmpty':
+                    # Отправляем статистику для этой очереди
+                    with self.lock:
+                        self.send_queue_stats(queue_name)
+                    break
+                
+                self.logger.info(f"Got message with queue_name: {queue_name} in thread")
+                
+                try:
+                    # Устанавливаем контекст для callback
+                    with self.lock:
+                        self.queue_name = queue_name
+                    
+                    # Обрабатываем сообщение
+                    self.callback(thread_rabbit_mq.channel, method_frame, header_frame, body)
+                    thread_rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                    
+                    # Увеличиваем счетчик сообщений для этой очереди
+                    with self.lock:
+                        self.queue_stats[queue_name]['count_message'] += 1
+                        
+                except Exception as e:
+                    self.logger.error(f"Ошибка обработки в потоке {queue_name}: {e}")
+                    error_key = self._parse_message(body)[2]
+                    thread_rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                    
+                    # Обновляем информацию об ошибках для этой очереди
+                    with self.lock:
+                        self.queue_stats[queue_name]['message_errors'].append(error_key)
+                        self.queue_stats[queue_name]['has_errors'] = True
+                        self.queue_name_errors.append(queue_name)
+                        self.send_queue_stats(queue_name)
+                    break
+            
+            # Закрываем соединение для этого потока
+            thread_rabbit_mq.close()
+            self.logger.info(f"Завершение обработки очереди {queue_name} в отдельном потоке")
+            
+        except Exception as ex_:
+            self.logger.error(f"Error in thread for queue {queue_name}: {ex_}")
+    
     def main(self):
         """
         The main method of the script. Process messages from all queues in `QUEUES_AND_ROUTING_KEYS'.
 
-        1. In the first cycle, announces and binds all queues once.
-        2. In the second cycle, it infinitely processes messages from these queues.
-        3. If an error occurs, logs it and closes the connection.
+        1. Создаёт и привязывает все очереди один раз.
+        2. Запускает отдельный поток для каждой очереди для параллельной обработки.
+        3. Ожидает завершения всех потоков перед закрытием соединения.
 
         :return:
         """
         delay: int = 60
         try:
-            # 1. Создаём и привязываем очереди один раз
+            # 1. Создаём и привязываем очереди один раз (в основном потоке)
             for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
                 self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+                # Инициализируем статистику для каждой очереди
+                with self.lock:
+                    self.queue_stats[queue_name] = {
+                        'count_message': 0,
+                        'message_errors': [],
+                        'table_name': None,
+                        'has_errors': False
+                    }
 
-            # 2. Основной цикл обработки сообщений
+            # 2. Основной цикл с параллельной обработкой очередей
             while True:
+                threads = []
+                
+                # Обновляем глобальные списки ошибок для определения, какие очереди не запускать
+                with self.lock:
+                    self.update_global_error_lists()
+                
+                # Запускаем отдельный поток для каждой очереди
                 for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
                     if queue_name not in self.queue_name_errors:
-                        self.process_queue(queue_name)
-
+                        thread = threading.Thread(
+                            target=self.process_queue_thread,
+                            args=(queue_name,),
+                            name=f"Thread-{queue_name}"
+                        )
+                        thread.daemon = True  # Поток завершится, когда завершится основной поток
+                        thread.start()
+                        threads.append(thread)
+                        self.logger.info(f"Запущен поток для очереди {queue_name}")
+                
+                # Ждем некоторое время, чтобы потоки могли обработать сообщения
                 time_.sleep(delay)
+                
+                # Ждем завершения всех потоков
+                for thread in threads:
+                    thread.join(timeout=1)  # Таймаут, чтобы не блокировать основной поток навсегда
+                
+                # Сбрасываем флаги ошибок для повторной попытки в следующей итерации
+                with self.lock:
+                    for queue_name in self.queue_stats:
+                        self.queue_stats[queue_name]['has_errors'] = False
+                    self.queue_name_errors = []
+                
         except Exception as ex_:
-            self.logger.error(f"Error: {ex_}")
+            self.logger.error(f"Error in main thread: {ex_}")
         finally:
             self.rabbit_mq.close()
 
