@@ -628,8 +628,8 @@ class DailySummary(DataCoreClient):
     def change_columns(self, *args, **kwargs) -> None:
         super().change_columns(
             data=kwargs.get('data'),
-            float_columns=['tonnage', 'cargo_weight'],
-            int_columns=['tare_weight', 'container_size'],
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
             date_columns=['motion_date'],
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=True
