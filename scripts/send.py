@@ -17,4 +17,4 @@ if __name__ == '__main__':
     rabbit_mq = RabbitMQ()
     data_file = read_file(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/test_deal.json")
     for _ in range(500):
-        rabbit_mq.publish("DC_TEST_QUEUE", "DC_TEST_RT", data_file)
+        rabbit_mq.publish("DC_TEST_QUEUE_1", "DC_TEST_RT_1", data_file)
