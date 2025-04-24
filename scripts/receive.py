@@ -395,7 +395,7 @@ class Receive:
         """
         loop = asyncio.get_running_loop()
         delay = 60
-        semaphore = asyncio.Semaphore(5)  # максимум 5 параллельных задач
+        semaphore = asyncio.Semaphore(15)  # максимум 15 параллельных задач
 
         async def limited_process(queue_name_):
             async with semaphore:
