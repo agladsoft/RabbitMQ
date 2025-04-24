@@ -4,5 +4,29 @@
     "DC_TEST_QUEUE_2":
         "DC_TEST_RT_2",
     "DC_TEST_QUEUE_3":
-        "DC_TEST_RT_3"
+        "DC_TEST_RT_3",
+    "DC_TEST_QUEUE_4":
+        "DC_TEST_RT_4",
+    "DC_TEST_QUEUE_5":
+        "DC_TEST_RT_5",
+    "DC_TEST_QUEUE_6":
+        "DC_TEST_RT_6",
+    "DC_TEST_QUEUE_7":
+        "DC_TEST_RT_7",
+    "DC_TEST_QUEUE_8":
+        "DC_TEST_RT_8",
+    "DC_TEST_QUEUE_9":
+        "DC_TEST_RT_9",
+    "DC_TEST_QUEUE_10":
+        "DC_TEST_RT_10",
+    "DC_TEST_QUEUE_11":
+        "DC_TEST_RT_11",
+    "DC_TEST_QUEUE_12":
+        "DC_TEST_RT_12",
+    "DC_TEST_QUEUE_13":
+        "DC_TEST_RT_13",
+    "DC_TEST_QUEUE_14":
+        "DC_TEST_RT_14",
+    "DC_TEST_QUEUE_15":
+        "DC_TEST_RT_15"
 }
