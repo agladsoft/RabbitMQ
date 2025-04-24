@@ -1,4 +1,5 @@
 import copy
+import asyncio
 import requests
 import time as time_
 from pathlib import Path
@@ -389,68 +390,65 @@ class Receive:
                 self.send_stats()
                 break
 
-    def main(self):
+    async def async_main(self):
         """
-        The main method of the script. Process messages from all queues in `QUEUES_AND_ROUTING_KEYS'.
-
-        1. In the first cycle, announces and binds all queues once.
-        2. In the second cycle, it infinitely processes messages from these queues.
-        3. If an error occurs, logs it and closes the connection.
-
-        :return:
+        Асинхронный main для параллельной обработки очередей через run_in_executor.
+        Для каждой очереди создаётся отдельный экземпляр Receive.
         """
-        delay: int = 60
-        try:
-            # 1. Создаём и привязываем очереди один раз
-            for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
-                self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
-
-            # 2. Основной цикл обработки сообщений
-            while True:
-                for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
-                    if queue_name not in self.queue_name_errors:
-                        self.process_queue(queue_name)
-
-                time_.sleep(delay)
-        except Exception as ex_:
-            self.logger.error(f"Error: {ex_}")
-        finally:
-            self.rabbit_mq.close()
+        loop = asyncio.get_running_loop()
+        delay = 60
+        # 1. Создаём и привязываем очереди один раз
+        for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
+            self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+        while True:
+            tasks = []
+            for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
+                if queue_name not in self.queue_name_errors:
+                    # Для каждой очереди создаём отдельный экземпляр Receive
+                    receive_instance = Receive()
+                    receive_instance.queue_name_errors = self.queue_name_errors
+                    tasks.append(loop.run_in_executor(None, receive_instance.process_queue, queue_name))
+            if tasks:
+                await asyncio.gather(*tasks)
+            await asyncio.sleep(delay)
 
 
 CLASSES: list = [
-    # Данные по DC
-    AccountingDocumentsRequests,
-    Accounts,
-    AutoVisits,
-    AutoPickupGeneralReport,
-    CompletedRepackagesReport,
-    Consignments,
-    CounterParties,
+    # # Данные по DC
+    # AccountingDocumentsRequests,
+    # Accounts,
+    # AutoVisits,
+    # AutoPickupGeneralReport,
+    # CompletedRepackagesReport,
+    # Consignments,
+    # CounterParties,
     DailySummary,
-    DataCoreFreight,
-    DevelopmentCounterpartyDepartment,
-    ExportBookings,
-    FreightRates,
-    ImportBookings,
-    MarginalityOrdersActDate,
-    NaturalIndicatorsContractsSegments,
-    NaturalIndicatorsTransactionFactDate,
-    NaturalIndicatorsRailwayReceptionDispatch,
-    OrdersMarginalityReport,
-    OrdersReport,
-    ReferenceLocations,
-    RusconProducts,
-    RZHDOperationsReport,
-    SalesPlan,
-    TerminalsCapacity,
-    TransportUnits,
-
-    # Данные по DO
-    ManagerEvaluation,
-    ReferenceCounterparties
+    DailySummary,
+    DailySummary,
+    # DataCoreFreight,
+    # DevelopmentCounterpartyDepartment,
+    # ExportBookings,
+    # FreightRates,
+    # ImportBookings,
+    # MarginalityOrdersActDate,
+    # NaturalIndicatorsContractsSegments,
+    # NaturalIndicatorsTransactionFactDate,
+    # NaturalIndicatorsRailwayReceptionDispatch,
+    # OrdersMarginalityReport,
+    # OrdersReport,
+    # ReferenceLocations,
+    # RusconProducts,
+    # RZHDOperationsReport,
+    # SalesPlan,
+    # TerminalsCapacity,
+    # TransportUnits,
+    #
+    # # Данные по DO
+    # ManagerEvaluation,
+    # ReferenceCounterparties
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    Receive().main()
+    # Для запуска асинхронного main
+    asyncio.run(Receive().async_main())
