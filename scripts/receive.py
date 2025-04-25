@@ -8,6 +8,7 @@ from scripts.tables import *
 from scripts.__init__ import *
 from pika import BasicProperties
 from datetime import datetime, time
+from asyncio import AbstractEventLoop
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
@@ -392,19 +393,25 @@ class Receive:
         Асинхронный main для параллельной обработки очередей через run_in_executor.
         Для каждой очереди создаётся отдельный экземпляр Receive.
         """
-        loop = asyncio.get_running_loop()
-        delay = 60
+        loop: AbstractEventLoop = asyncio.get_running_loop()
+        delay: int = 60
+        semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
+
+        async def limited_process(queue_name):
+            async with semaphore:
+                receive_instance: Receive = Receive()
+                receive_instance.queue_name_errors = self.queue_name_errors
+                await loop.run_in_executor(None, receive_instance.process_queue, queue_name)
+        
         # 1. Создаём и привязываем очереди один раз
         for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
             self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
         while True:
-            tasks = []
-            for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
-                if queue_name not in self.queue_name_errors:
-                    # Для каждой очереди создаём отдельный экземпляр Receive
-                    receive_instance = Receive()
-                    receive_instance.queue_name_errors = self.queue_name_errors
-                    tasks.append(loop.run_in_executor(None, receive_instance.process_queue, queue_name))
+            tasks: list = [
+                limited_process(queue_name)
+                for queue_name in QUEUES_AND_ROUTING_KEYS.keys()
+                if queue_name not in self.queue_name_errors
+            ]
             if tasks:
                 await asyncio.gather(*tasks)
             await asyncio.sleep(delay)
