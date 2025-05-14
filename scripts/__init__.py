@@ -37,7 +37,7 @@ def get_file_handler(name: str) -> logging.FileHandler:
         filename=f"{LOG_DIR_NAME}/{name}.log",
         mode='a',
         maxBytes=20 * pow(1024, 2),
-        backupCount=100
+        backupCount=3
     )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler
