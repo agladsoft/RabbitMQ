@@ -1,4 +1,3 @@
-import copy
 import asyncio
 import requests
 import time as time_
