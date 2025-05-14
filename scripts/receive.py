@@ -1,3 +1,5 @@
+import copy
+import asyncio
 import requests
 import time as time_
 from pathlib import Path
@@ -6,6 +8,7 @@ from scripts.tables import *
 from scripts.__init__ import *
 from pika import BasicProperties
 from datetime import datetime, time
+from asyncio import AbstractEventLoop
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
@@ -39,15 +42,12 @@ class Receive:
         :return: ClickHouse client.
         """
         try:
-            client: Client = get_client(
+            self.client: Client = get_client(
                 host=get_my_env_var('HOST'),
                 database=get_my_env_var('DATABASE'),
                 username=get_my_env_var('USERNAME_DB'),
                 password=get_my_env_var('PASSWORD')
             )
-            client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connected to clickhouse")
-            return client
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
@@ -407,33 +407,33 @@ class Receive:
                 self.send_stats()
                 break
 
-    def main(self):
+    async def async_main(self):
         """
-        The main method of the script. Process messages from all queues in `QUEUES_AND_ROUTING_KEYS'.
-
-        1. In the first cycle, announces and binds all queues once.
-        2. In the second cycle, it infinitely processes messages from these queues.
-        3. If an error occurs, logs it and closes the connection.
-
-        :return:
+        Асинхронный main для параллельной обработки очередей через run_in_executor.
+        Для каждой очереди создаётся отдельный экземпляр Receive.
         """
+        loop: AbstractEventLoop = asyncio.get_running_loop()
         delay: int = 60
-        try:
-            # 1. Создаём и привязываем очереди один раз
-            for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
-                self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+        semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
 
-            # 2. Основной цикл обработки сообщений
-            while True:
-                for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
-                    if queue_name not in self.queue_name_errors:
-                        self.process_queue(queue_name)
-
-                time_.sleep(delay)
-        except Exception as ex_:
-            self.logger.error(f"Error: {ex_}")
-        finally:
-            self.rabbit_mq.close()
+        async def limited_process(queue_name_):
+            async with semaphore:
+                receive_instance: Receive = Receive()
+                receive_instance.queue_name_errors = self.queue_name_errors
+                await loop.run_in_executor(None, receive_instance.process_queue, queue_name_)
+        
+        # 1. Создаём и привязываем очереди один раз
+        for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
+            self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+        while True:
+            tasks: list = [
+                limited_process(queue_name)
+                for queue_name in QUEUES_AND_ROUTING_KEYS.keys()
+                if queue_name not in self.queue_name_errors
+            ]
+            if tasks:
+                await asyncio.gather(*tasks)
+            await asyncio.sleep(delay)
 
 
 CLASSES: list = [
@@ -471,4 +471,5 @@ CLASSES: list = [
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    Receive().main()
+    # Для запуска асинхронного main
+    asyncio.run(Receive().async_main())
