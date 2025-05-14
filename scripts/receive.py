@@ -238,7 +238,15 @@ class Receive:
             raise AssertionError(f"Not found table name in dictionary. Russian table is {self.table_name}")
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
-    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str, message_count) -> None:
+    def process_data(
+        self,
+        all_data: dict,
+        data: list,
+        data_core: Any,
+        eng_table_name: str,
+        key_deals: str,
+        message_count: int
+    ) -> None:
         """
         Processes the given data, converting it to the required format and structure.
 
@@ -292,13 +300,13 @@ class Receive:
         :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
                  and the key deals identifier as a string.
         """
-        msg: str = msg.decode('utf-8-sig')
-        all_data: dict = json.loads(msg)
+        msg: str = msg.decode('utf-8-sig') if isinstance(msg, (bytes, bytearray)) else msg
+        all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def handle_incoming_json(self, msg: Union[bytes, str, dict], message_count: int) -> Tuple[dict, list, Any, str]:
+    def handle_incoming_json(self, msg: Union[bytes, str, dict], message_count: int = 0) -> Tuple[dict, list, Any, str]:
         """
         Handles an incoming JSON message.
 
@@ -409,8 +417,19 @@ class Receive:
 
     async def async_main(self):
         """
-        Асинхронный main для параллельной обработки очередей через run_in_executor.
-        Для каждой очереди создаётся отдельный экземпляр Receive.
+        Asynchronously processes multiple RabbitMQ queues in parallel.
+
+        This method sets up a loop to continuously process messages from multiple
+        RabbitMQ queues. It uses an asyncio semaphore to limit the number of
+        concurrent tasks to 10. For each queue, it creates and binds the queue
+        once and then continually processes messages from it, unless the queue
+        is in the error list. The method sleeps for a specified delay between
+        processing cycles.
+
+        A separate limited_process coroutine is used to handle the processing
+        of each queue, allowing for parallel execution of up to 10 queues.
+
+        :return: None
         """
         loop: AbstractEventLoop = asyncio.get_running_loop()
         delay: int = 60
