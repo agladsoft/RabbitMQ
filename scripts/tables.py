@@ -39,7 +39,7 @@ class DataCoreClient:
 
     @property
     def database(self):
-        return self.receive.client.database
+        return "DataCore"
 
     @property
     def deal(self):

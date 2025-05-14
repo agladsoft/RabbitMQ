@@ -22,7 +22,8 @@ class Receive:
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
-        self.client: Optional[Client] = self.connect_to_db()
+        self.client: Optional[Client] = None
+        self.connect_to_db()
         self.count_message: int = 0
         self.is_greater_time: bool = False
         self.queue_name: Optional[str] = None
