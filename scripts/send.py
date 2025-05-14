@@ -1,4 +1,5 @@
 import json
+import uuid
 from scripts.rabbit_mq import RabbitMQ
 from scripts.__init__ import get_my_env_var
 
@@ -8,7 +9,7 @@ if __name__ == '__main__':
     # Читаем исходный json как dict
     with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/test_deal.json", 'r', encoding='utf-8') as f:
         base_data = json.load(f)
-    for i in range(2, 16):
+    for i in range(1, 16):
         # Копируем данные и меняем report
         data = base_data.copy()
         data['header'] = data['header'].copy()
@@ -18,4 +19,5 @@ if __name__ == '__main__':
         queue_name = f"DC_TEST_QUEUE_{i}"
         routing_key = f"DC_TEST_RT_{i}"
         for _ in range(10000):
+            data['header']['key_id'] = str(uuid.uuid4())
             rabbit_mq.publish(queue_name, routing_key, data_bytes)
