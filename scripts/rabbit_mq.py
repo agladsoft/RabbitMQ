@@ -45,10 +45,12 @@ class RabbitMQ:
 
     def declare_and_bind_queue(self, queue_name: str, routing_key: str) -> None:
         """
-        Создаёт очередь (если её нет) и привязывает её к exchange.
-
-        :param queue_name: Название очереди.
-        :param routing_key: Routing key для привязки.
+        Declares a RabbitMQ queue and binds it to the exchange with the given
+        routing key. This method is idempotent and will not raise an exception
+        if the queue already exists or is already bound to the exchange.
+        :param queue_name: The name of the queue to declare and bind.
+        :param routing_key: The routing key to use when binding the queue to the exchange.
+        :return: None
         """
         self.channel.queue_declare(queue=queue_name, durable=True)
         self.channel.queue_bind(
