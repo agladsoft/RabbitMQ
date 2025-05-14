@@ -397,11 +397,11 @@ class Receive:
         delay: int = 60
         semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
 
-        async def limited_process(queue_name):
+        async def limited_process(queue_name_):
             async with semaphore:
                 receive_instance: Receive = Receive()
                 receive_instance.queue_name_errors = self.queue_name_errors
-                await loop.run_in_executor(None, receive_instance.process_queue, queue_name)
+                await loop.run_in_executor(None, receive_instance.process_queue, queue_name_)
         
         # 1. Создаём и привязываем очереди один раз
         for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
@@ -418,51 +418,36 @@ class Receive:
 
 
 CLASSES: list = [
-    # # Данные по DC
-    # AccountingDocumentsRequests,
-    # Accounts,
-    # AutoVisits,
-    # AutoPickupGeneralReport,
-    # CompletedRepackagesReport,
-    # Consignments,
-    # CounterParties,
-    # DailySummary,
-    Test1,
-    Test2,
-    Test3,
-    Test4,
-    Test5,
-    Test6,
-    Test7,
-    Test8,
-    Test9,
-    Test10,
-    Test11,
-    Test12,
-    Test13,
-    Test14,
-    Test15,
-    # DataCoreFreight,
-    # DevelopmentCounterpartyDepartment,
-    # ExportBookings,
-    # FreightRates,
-    # ImportBookings,
-    # MarginalityOrdersActDate,
-    # NaturalIndicatorsContractsSegments,
-    # NaturalIndicatorsTransactionFactDate,
-    # NaturalIndicatorsRailwayReceptionDispatch,
-    # OrdersMarginalityReport,
-    # OrdersReport,
-    # ReferenceLocations,
-    # RusconProducts,
-    # RZHDOperationsReport,
-    # SalesPlan,
-    # TerminalsCapacity,
-    # TransportUnits,
-    #
-    # # Данные по DO
-    # ManagerEvaluation,
-    # ReferenceCounterparties
+    # Данные по DC
+    AccountingDocumentsRequests,
+    Accounts,
+    AutoVisits,
+    AutoPickupGeneralReport,
+    CompletedRepackagesReport,
+    Consignments,
+    CounterParties,
+    DailySummary,
+    DataCoreFreight,
+    DevelopmentCounterpartyDepartment,
+    ExportBookings,
+    FreightRates,
+    ImportBookings,
+    MarginalityOrdersActDate,
+    NaturalIndicatorsContractsSegments,
+    NaturalIndicatorsTransactionFactDate,
+    NaturalIndicatorsRailwayReceptionDispatch,
+    OrdersMarginalityReport,
+    OrdersReport,
+    ReferenceLocations,
+    RusconProducts,
+    RZHDOperationsReport,
+    SalesPlan,
+    TerminalsCapacity,
+    TransportUnits,
+
+    # Данные по DO
+    ManagerEvaluation,
+    ReferenceCounterparties
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
