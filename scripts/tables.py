@@ -1144,3 +1144,468 @@ class ReferenceCounterparties(DataCoreClient):
             "manager", "legal_address", "actual_address", "postal_address", "telephone_number", "email", "website",
             "organization_uid", "organization", "is_control", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
+
+
+class Test1(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test2(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test3(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test4(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test5(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test6(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test7(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test8(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test9(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test10(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test11(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test12(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test13(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test14(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
+
+class Test15(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_motion_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=['tonnage', 'cargo_weight', 'tare_weight'],
+            int_columns=['container_size'],
+            date_columns=['motion_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=True
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
