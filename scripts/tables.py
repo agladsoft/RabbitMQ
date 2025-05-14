@@ -433,6 +433,16 @@ class DataCoreFreight(DataCoreClient):
 
         data['voyage_month'] = data['voyage_month'].month if data.get('voyage_month') else None
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "debit_status", "invoice_status", "invoice_port", "terminal", "operation_date",
+            "original_voyage_month_string", "voyage", "voyage_month", "voyage_date", "is_freight", "operation_month",
+            "container_count", "discharge_load_port", "booking_discharge_port", "booking_load_port", "tnved",
+            "container_size", "cargo", "client_inn", "manager", "line", "client", "client_uid", "operation_segment",
+            "vessel", "department", "container", "direction", "order_number", "container_type", "consignment",
+            "destination_port", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class NaturalIndicatorsContractsSegments(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -452,10 +462,24 @@ class NaturalIndicatorsContractsSegments(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "direction", "month", "year", "segment", "date", "original_date_string", "order_number",
+            "container_number", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class CounterParties(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "main_manager", "classification", "counterparty", "is_supplier", "registration_country",
+            "inn", "relationship_type", "legal_physical_entity", "head_counterparty", "full_name", "is_foreign_company",
+            "short_name", "is_client", "legal_address", "planned_turnover", "status", "rc_uid", "is_other",
+            "counterparty_type", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class OrdersReport(DataCoreClient):
@@ -475,6 +499,13 @@ class OrdersReport(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "tnved", "line", "load_port", "shipper_inn", "consignee", "shipper", "container_number",
+            "vessel", "voyage_date", "voyage", "consignment", "order_number", "original_voyage_date_string",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class AutoPickupGeneralReport(DataCoreClient):
@@ -503,10 +534,28 @@ class AutoPickupGeneralReport(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "comment", "performer", "overpayment", "total_rate", "downtime_amount", "agreed_rate",
+            "carrier", "date_delivery_empty_fact", "original_date_delivery_plan_string", "date_delivery_empty_plan",
+            "date_loading_fact", "mode", "date_delivery_fact", "container_size", "overload_amount", "line", "client",
+            "client_uid", "date_receiving_empty_fact", "department", "date_delivery_plan", "destination_point",
+            "manager", "carrier_rate", "departure_point", "terminal_receiving_empty", "container_number",
+            "terminal_delivery_empty", "date_loading_plan", "direction", "container_type", "transportation_type",
+            "economy", "order_number", "increased_rates_reason", "service", "date_receiving_empty_plan",
+            "add_expense_amount", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class TransportUnits(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "owner", "container_number", "container_type", "container_size",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class Consignments(DataCoreClient):
@@ -527,6 +576,13 @@ class Consignments(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "direction", "year", "voyage_date", "original_voyage_date_string", "voyage", "cargo",
+            "container_number", "container_size", "agent_line", "line", "teu", "consignee", "shipper", "order_number",
+            "container_type", "consignment", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class SalesPlan(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -541,6 +597,12 @@ class SalesPlan(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "teu", "container_count", "container_size", "direction", "client", "year", "month",
+            "client_uid", "department", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class NaturalIndicatorsTransactionFactDate(DataCoreClient):
@@ -564,6 +626,14 @@ class NaturalIndicatorsTransactionFactDate(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "container_size", "operation_date", "is_full", "original_operation_date_string",
+            "operation_month", "container_count", "teu", "manager", "container_type", "operation_year", "order_number",
+            "direction", "client", "order_date", "client_uid", "department", "original_file_parsed_on", "sign",
+            "is_obsolete_date"
+        ]
+
 
 class DevelopmentCounterpartyDepartment(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -578,6 +648,12 @@ class DevelopmentCounterpartyDepartment(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "client", "year", "direction", "client_uid", "department", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
 
 
 class ExportBookings(DataCoreClient):
@@ -598,6 +674,16 @@ class ExportBookings(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "freight_rate_uid", "booking_status", "discharge_port_bay", "client_uid", "client",
+            "container_owner", "load_port_bay", "cargo_readiness", "etd", "sob", "teu", "freight_terms",
+            "container_number", "container_size", "container_type", "eta", "original_booking_date_string",
+            "voyage", "container_count", "discharge_port", "load_port", "direction", "freight_rate",
+            "forwarder", "line", "service_number", "department", "vessel", "order_number", "booking_date",
+            "manager", "booking", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class ImportBookings(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -616,6 +702,16 @@ class ImportBookings(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "freight_rate_uid", "booking_status", "discharge_port_bay", "client_uid", "client",
+            "container_owner", "load_port_bay", "etd", "agent", "container_number", "container_size", "container_type",
+            "eta", "sob", "original_booking_date_string", "teu", "freight_terms", "voyage", "container_count",
+            "discharge_port", "load_port", "direction", "freight_rate", "forwarder", "remarks", "line", "consignee",
+            "service_number", "department", "vessel", "order_number", "booking_date", "manager", "booking",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class CompletedRepackagesReport(DataCoreClient):
@@ -639,6 +735,15 @@ class CompletedRepackagesReport(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "warehouse_wms_count", "inspection_container_count", "import_teu",
+            "consignment", "import_container_count", "terminal", "export_teu", "zatarka_object_type",
+            "rastarka_object_type", "repacking_place", "operation_type", "container_number",
+            "export_container_count", "cargo", "technology", "repacking_date",
+            "original_repacking_date_string", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class AutoVisits(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -657,6 +762,15 @@ class AutoVisits(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=True
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "processing_place", "is_manual_select", "rejection_reason", "comment",
+            "processing_time", "exit_datetime", "entry_datetime", "original_entry_datetime_string",
+            "result", "waiting_time", "status", "container_number", "purpose", "registration_datetime",
+            "repacking_place", "terminal", "car_number", "request_number", "queue_id",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class AccountingDocumentsRequests(DataCoreClient):
@@ -677,6 +791,15 @@ class AccountingDocumentsRequests(DataCoreClient):
             is_datetime=True
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "rejection_reason", "status", "performer", "comment",
+            "start_date", "manager", "description", "department", "is_urgency",
+            "addressee_peo", "end_date", "request_date", "original_request_date_string",
+            "order_number", "request_type", "request_number", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
 
 class DailySummary(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -696,6 +819,18 @@ class DailySummary(DataCoreClient):
             is_datetime=True
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "organization_uid", "comment", "direction", "cargo_weight",
+            "consignment_imp", "vtt_gtd", "cargo", "destination_point", "transport_type",
+            "client_uid", "terminal", "motion_type", "seal", "manager", "departure_point",
+            "transport_number", "tare_weight", "organization", "tonnage", "is_so", "client",
+            "line", "order_number", "container_type", "container_size", "consignment_exp",
+            "container_state", "container_number", "forwarder", "damages_note", "motion_date",
+            "original_motion_date_string", "is_request_line", "original_file_parsed_on",
+            "sign", "is_obsolete_date"
+        ]
+
 
 class RZHDOperationsReport(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -714,6 +849,17 @@ class RZHDOperationsReport(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "document_number", "etsng_code_ktk", "etsng_order_base_cargo", "etsng_operation_cargo",
+            "is_border_crossing_point", "service", "client_uid", "client", "etsng_name", "container_size",
+            "operation_month", "operation_date", "original_operation_date_string", "direction", "type_of_relation",
+            "department", "container_number", "etsng_code", "destination_point", "destination_station_code",
+            "destination_point_type", "manager", "client_inn", "departure_point", "departure_station_code",
+            "departure_point_type", "order_number", "operation_name", "container_type", "operation_year",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class OrdersMarginalityReport(DataCoreClient):
@@ -738,6 +884,15 @@ class OrdersMarginalityReport(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "expenses_rental_without_vat_fact", "income_without_vat_fact", "profit_plan",
+            "income_without_vat_plan", "expenses_without_vat_plan", "manager", "organization_uid", "segment_decryption",
+            "organization", "client_uid", "expenses_without_vat_fact", "department", "client", "segment",
+            "order_number", "profit_fact", "order_creation_date", "original_order_creation_date_string",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -758,14 +913,6 @@ class NaturalIndicatorsRailwayReceptionDispatch(DataCoreClient):
         )
 
     def get_table_columns(self):
-        """
-        Retrieves the column names of the specified table in the database.
-
-        This method queries the database to describe the structure of the table
-        and extracts the list of column names from the result.
-
-        :return: A list of column names in the specified table.
-        """
         return [
             'key_id', 'uuid', 'date', 'original_date_string', 'organization', 'terminal',
             'client_uid', 'client', 'operation', 'is_empty', 'container_count', 'container_size',
@@ -792,6 +939,13 @@ class Accounts(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "date", "original_date_string", "organization", "client_uid", "client", "department",
+            "currency", "profit_account_rub", "profit_account", "client_inn", "unit_of_measurement", "order_number",
+            "segment", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class FreightRates(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -810,6 +964,15 @@ class FreightRates(DataCoreClient):
             bool_columns=['priority', 'oversized', 'dangerous', 'special_rate', 'guideline'],
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "freight_rate_uid", "priority", "oversized_width", "oversized_height", "oversized_length",
+            "oversized", "dangerous", "client", "imo", "pol", "pod", "type_pol", "type_pod", "expiration_date",
+            "start_date", "original_date_string", "forwarder", "guideline", "through_service", "rate_owner", "line",
+            "size_and_type", "rate", "currency", "special_rate", "code_special_rate", "operator", "container_owner",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class MarginalityOrdersActDate(DataCoreClient):
@@ -834,6 +997,15 @@ class MarginalityOrdersActDate(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "act_creation_date", "act_creation_date_max", "original_act_creation_date_string",
+            "department", "direction", "client_uid", "client", "manager", "operation_type", "segment", "order_number",
+            "count_ktk_by_order", "count_ktk_by_operation", "profit_plan", "variable_costs_plan", "margin_plan",
+            "profit_fact", "variable_costs_fact", "margin_fact", "margin_fact_percent", "margin_fact_per_unit",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class RusconProducts(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -856,6 +1028,16 @@ class RusconProducts(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "product", "stepname", "department", "key", "manager_division", "manager", "counterparty",
+            "crm_counterparty_number", "project_number", "kp_number", "kp_date", "direction", "container_size",
+            "container_type", "container_count", "container_count_40", "container_count_20", "cargo", "kp_currency",
+            "kp_amount", "kp_amount_cost", "kp_margin", "kp_margin_amount", "kp_margin_container",
+            "kp_revenue_rate_container", "kp_cost_container", "discharge_point", "loading_point", "dangerous",
+            "original_kp_date_string", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 
 class ReferenceLocations(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -870,6 +1052,13 @@ class ReferenceLocations(DataCoreClient):
             bool_columns=['is_border_crossing'],
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "seaport", "seaport_eng", "seaport_code", "seaport_rus", "key", "type", "status",
+            "postcode", "lat_port", "long_port", "country", "code", "code_alpha_two", "station_code",
+            "is_border_crossing", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class TerminalsCapacity(DataCoreClient):
@@ -889,6 +1078,12 @@ class TerminalsCapacity(DataCoreClient):
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "stock", "terminal", "date", "original_date_string", "container_size", "container_count",
+            "teu", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
 
 
 class ManagerEvaluation(DataCoreClient):
@@ -913,6 +1108,14 @@ class ManagerEvaluation(DataCoreClient):
             is_datetime=kwargs.get('is_datetime', False)
         )
 
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "manager_id", "manager_fullname", "manager_email", "manager_position", "pluralist",
+            "manager_division", "manager_department", "manager_status", "portal_profile", "evaluation", "comment",
+            "evaluation_date", "original_date_string", "company_email", "message_id", "original_file_parsed_on", "sign",
+            "is_obsolete_date"
+        ]
+
 
 class ReferenceCounterparties(DataCoreClient):
     def __init__(self, receive: "Receive"):
@@ -931,3 +1134,13 @@ class ReferenceCounterparties(DataCoreClient):
             bool_columns=['is_control', 'is_foreign_company'],
             is_datetime=kwargs.get('is_datetime', False)
         )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "name", "do_uid", "status", "head_counterparty", "included_in_group",
+            "legal_physical_entity", "full_name", "inn", "kpp", "okpo", "ogrn", "is_foreign_company",
+            "deletion_flag", "registration_country", "registration_number", "tax_number", "counterparty_type",
+            "supplier_customer_type", "classification", "contract_type", "relationship_type", "planned_turnover",
+            "manager", "legal_address", "actual_address", "postal_address", "telephone_number", "email", "website",
+            "organization_uid", "organization", "is_control", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
