@@ -14,10 +14,12 @@ if __name__ == '__main__':
         data = base_data.copy()
         data['header'] = data['header'].copy()
         data['header']['report'] = f"ТЕСТ_{i}"
-        # Сериализуем в bytes
-        data_bytes = json.dumps(data, ensure_ascii=False, indent=4).encode('utf-8')
         queue_name = f"DC_TEST_QUEUE_{i}"
         routing_key = f"DC_TEST_RT_{i}"
         for _ in range(10000):
-            data['header']['key_id'] = str(uuid.uuid4())
+            new_uuid = str(uuid.uuid4())
+            data['header']['key_id'] = new_uuid
+            for item in data['data']:
+                item['key_id'] = new_uuid
+            data_bytes = json.dumps(data, ensure_ascii=False, indent=4).encode('utf-8')
             rabbit_mq.publish(queue_name, routing_key, data_bytes)
