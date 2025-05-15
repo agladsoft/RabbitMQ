@@ -22,6 +22,7 @@ class Receive:
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
+        self.write_semaphore: asyncio.Semaphore = asyncio.Semaphore(1)
         self.client: Optional[Client] = None
         self.connect_to_db()
         self.count_message: int = 0
@@ -77,7 +78,7 @@ class Receive:
         with open(self.log_file, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=4)
 
-    def update_stats(self) -> None:
+    async def update_stats(self) -> None:
         """
         Update statistics in log file.
 
@@ -87,20 +88,21 @@ class Receive:
 
         :return:
         """
-        stats: dict = self.load_stats()
-        today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if self.queue_name not in stats:
-            stats[self.queue_name] = {
-                "timestamp": today,
-                "count_message": 0,
-                "processed_table": None
-            }
+        async with self.write_semaphore:
+            stats: dict = self.load_stats()
+            today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if self.queue_name not in stats:
+                stats[self.queue_name] = {
+                    "timestamp": today,
+                    "count_message": 0,
+                    "processed_table": None
+                }
 
-        stats[self.queue_name]["count_message"] += self.count_message
-        stats[self.queue_name]["processed_table"] = self.table_name
-        stats[self.queue_name]["timestamp"] = today
+            stats[self.queue_name]["count_message"] += self.count_message
+            stats[self.queue_name]["processed_table"] = self.table_name
+            stats[self.queue_name]["timestamp"] = today
 
-        self.save_stats(stats)
+            self.save_stats(stats)
 
     def _check_and_update_log(
         self,
