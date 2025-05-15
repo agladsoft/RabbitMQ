@@ -444,29 +444,15 @@ class Receive:
         # 1. Создаём и привязываем очереди один раз
         for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
             self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
-        try:
-            while True:
-                tasks = [
-                    limited_process(queue_name)
-                    for queue_name in QUEUES_AND_ROUTING_KEYS.keys()
-                    if queue_name not in self.queue_name_errors
-                ]
-                if tasks:
-                    try:
-                        await asyncio.gather(*tasks)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        self.logger.error(f"Ошибка при выполнении задач: {e}")
-                        self.logger.exception("Детали ошибки:")
-                await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            self.logger.info("Получен сигнал на завершение работы")
-            raise
-        except Exception as e:
-            self.logger.error(f"Критическая ошибка в async_main: {e}")
-            self.logger.exception("Детали ошибки:")
-            raise
+        while True:
+            tasks: list = [
+                limited_process(queue_name)
+                for queue_name in QUEUES_AND_ROUTING_KEYS.keys()
+                if queue_name not in self.queue_name_errors
+            ]
+            if tasks:
+                await asyncio.gather(*tasks)
+            await asyncio.sleep(delay)
 
 
 CLASSES: list = [
