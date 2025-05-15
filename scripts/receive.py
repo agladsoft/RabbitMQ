@@ -1,3 +1,4 @@
+import fcntl
 import asyncio
 import requests
 import time as time_
@@ -76,9 +77,15 @@ class Receive:
         :return:
         """
         with open(self.log_file, "w", encoding="utf-8") as f:
+            # Acquire exclusive lock on the file
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
             json.dump(stats, f, ensure_ascii=False, indent=4)
 
-    async def update_stats(self) -> None:
+            # Release the lock
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def update_stats(self) -> None:
         """
         Update statistics in log file.
 
@@ -88,21 +95,20 @@ class Receive:
 
         :return:
         """
-        async with self.write_semaphore:
-            stats: dict = self.load_stats()
-            today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            if self.queue_name not in stats:
-                stats[self.queue_name] = {
-                    "timestamp": today,
-                    "count_message": 0,
-                    "processed_table": None
-                }
+        stats: dict = self.load_stats()
+        today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if self.queue_name not in stats:
+            stats[self.queue_name] = {
+                "timestamp": today,
+                "count_message": 0,
+                "processed_table": None
+            }
 
-            stats[self.queue_name]["count_message"] += self.count_message
-            stats[self.queue_name]["processed_table"] = self.table_name
-            stats[self.queue_name]["timestamp"] = today
+        stats[self.queue_name]["count_message"] += self.count_message
+        stats[self.queue_name]["processed_table"] = self.table_name
+        stats[self.queue_name]["timestamp"] = today
 
-            self.save_stats(stats)
+        self.save_stats(stats)
 
     def _check_and_update_log(
         self,
