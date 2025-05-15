@@ -6,9 +6,9 @@ from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
-# os.environ['TOKEN_TELEGRAM'] = '6557326533:AAGcYU6q0DFLJfjZMHTaDjLnf-PzRMzA-6M'
-# os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
-# os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
+os.environ['TOKEN_TELEGRAM'] = '6557326533:AAGcYU6q0DFLJfjZMHTaDjLnf-PzRMzA-6M'
+os.environ['XL_IDP_PATH_RABBITMQ'] = '/home/timur/sambashare/RabbitMQ'
+os.environ['XL_IDP_ROOT_RABBITMQ'] = '/home/timur/PycharmWork/RabbitMQ'
 
 
 def get_my_env_var(var_name: str) -> str:
@@ -18,11 +18,16 @@ def get_my_env_var(var_name: str) -> str:
         raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
 
 
+BATCH_SIZE: int = 5000
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
 LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 LOG_DIR_NAME: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
 LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.json"
 LOG_TABLE: str = "rmq_log"
+SERVER_AND_SUFFIX_QUEUE: dict = {
+    "TEST": "10.23.4.203",
+    "QUEUE": "10.23.4.196"
+}
 with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/queues_config.json", "r", encoding="utf-8") as file:
     QUEUES_AND_ROUTING_KEYS: dict = json.load(file)
 with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/tables_config.json", "r", encoding="utf-8") as file:
@@ -36,7 +41,7 @@ def get_file_handler(name: str) -> logging.FileHandler:
         filename=f"{LOG_DIR_NAME}/{name}.log",
         mode='a',
         maxBytes=20 * pow(1024, 2),
-        backupCount=100
+        backupCount=3
     )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
     return file_handler

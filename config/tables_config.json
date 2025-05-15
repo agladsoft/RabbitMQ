@@ -52,5 +52,7 @@
     "ОценкиМенеджеров":
         "manager_evaluation",
     "СправочникКонтрагентовДО":
-        "reference_counterparties"
+        "reference_counterparties",
+    "СправочникДоговорыДО":
+        "reference_contracts"
 }
