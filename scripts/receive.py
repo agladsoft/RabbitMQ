@@ -380,8 +380,9 @@ class Receive:
             os.makedirs(fle.parent)  # Создаем директорию, если не существует
 
         with open(file_name, 'w') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             json.dump(msg, f, indent=4, ensure_ascii=False, default=serialize_datetime)
-
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         return file_name
 
     def process_queue(self, queue_name: str) -> None:
