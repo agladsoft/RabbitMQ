@@ -485,7 +485,8 @@ CLASSES: list = [
 
     # Данные по DO
     ManagerEvaluation,
-    ReferenceCounterparties
+    ReferenceCounterparties,
+    ReferenceContracts
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 

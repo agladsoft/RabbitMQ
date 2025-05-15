@@ -1144,3 +1144,36 @@ class ReferenceCounterparties(DataCoreClient):
             "manager", "legal_address", "actual_address", "postal_address", "telephone_number", "email", "website",
             "organization_uid", "organization", "is_control", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
+
+
+class ReferenceContracts(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def database(self):
+        return "DO"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=[
+                'contract_date', 'date_of_creation', 'approvals_date', 'signing_date',
+                'returned_archive_date', 'date_tripartite_agreement'
+            ],
+            bool_columns=['returned_archive', 'additional_agreement'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "do_uid", "heading", "template_name", "contract_number", "contract_date",
+            "type_of_relationship", "additional_agreement", "organization_uid", "organization_inn", "organization_name",
+            "counterparty_uid", "counterparty_inn", "counterparty_name", "prepared_uid", "prepared_name",
+            "prepared_cfo", "responsible_uid", "responsible_name", "responsible_cfo", "document_form",
+            "date_of_creation", "approval_status", "approvals_date", "signing_status", "signing_date",
+            "returned_archive", "returned_archive_date", "date_tripartite_agreement", "number_tripartite_agreement",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
