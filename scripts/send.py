@@ -1,19 +1,21 @@
+import json
 from scripts.rabbit_mq import RabbitMQ
 from scripts.__init__ import get_my_env_var
 
 
-def read_file(file_path='') -> bytes:
-    """
-    Reading json format file.
-    :param file_path: File path.
-    :return: File content.
-    """
-    with open(file_path, 'rb') as file:
-        data = file.read()
-    return data
-
-
 if __name__ == '__main__':
     rabbit_mq = RabbitMQ()
-    data_file = read_file(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/test_deal.json")
-    rabbit_mq.publish("DC_ACCOUNTING_DOCUMENTS_REQUESTS_QUEUE_TEST", "DC_ACCOUNTING_DOCUMENTS_REQUESTS_RT", data_file)
+    # Читаем исходный json как dict
+    with open(f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/config/test_deal.json", 'r', encoding='utf-8') as f:
+        base_data = json.load(f)
+    for i in range(1, 16):
+        # Копируем данные и меняем report
+        data = base_data.copy()
+        data['header'] = data['header'].copy()
+        data['header']['report'] = f"ТЕСТ_{i}"
+        # Сериализуем в bytes
+        data_bytes = json.dumps(data, ensure_ascii=False, indent=4).encode('utf-8')
+        queue_name = f"DC_TEST_QUEUE_{i}"
+        routing_key = f"DC_TEST_RT_{i}"
+        for _ in range(500):
+            rabbit_mq.publish(queue_name, routing_key, data_bytes)

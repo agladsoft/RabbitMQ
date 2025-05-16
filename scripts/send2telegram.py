@@ -1,4 +1,3 @@
-import socket
 import requests
 from scripts.__init__ import *
 
@@ -33,13 +32,9 @@ def send_message():
             total_lines: int = 0
             message = handle_message(logs, message, total_lines)
 
-    s: socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(('10.0.0.0', 0))
-    ip_server: str = s.getsockname()[0]
-
     params: dict = {
         "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
-        "text": f"Статистика обработки сообщений за день с RabbitMQ на сервере {ip_server}:\n"
+        "text": f"Статистика обработки сообщений за день с RabbitMQ на сервере {get_my_env_var('HOST_HOSTNAME')}:\n"
                 f"<blockquote expandable>{message}</blockquote>",
         "parse_mode": "HTML",
         "reply_to_message_id": get_my_env_var('MESSAGE_ID')

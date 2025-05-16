@@ -45,24 +45,19 @@ class RabbitMQ:
 
     def declare_and_bind_queue(self, queue_name: str, routing_key: str) -> None:
         """
-        Создаёт очередь (если её нет) и привязывает её к exchange.
-
-        :param queue_name: Название очереди.
-        :param routing_key: Routing key для привязки.
+        Declares a RabbitMQ queue and binds it to the exchange with the given
+        routing key. This method is idempotent and will not raise an exception
+        if the queue already exists or is already bound to the exchange.
+        :param queue_name: The name of the queue to declare and bind.
+        :param routing_key: The routing key to use when binding the queue to the exchange.
+        :return: None
         """
         self.channel.queue_declare(queue=queue_name, durable=True)
-        if "DC_QH_PROD_Q" in queue_name:
-            self.channel.queue_bind(
-                exchange="DC_QH_PROD_EX",
-                queue=queue_name,
-                routing_key=routing_key
-            )
-        else:
-            self.channel.queue_bind(
-                exchange=self.exchange_name,
-                queue=queue_name,
-                routing_key=routing_key
-            )
+        self.channel.queue_bind(
+            exchange=self.exchange_name,
+            queue=queue_name,
+            routing_key=routing_key
+        )
 
     def consume(self, queue_name: str, callback: callable) -> None:
         """
@@ -105,17 +100,9 @@ class RabbitMQ:
 
         # Объявляем очередь и привязываем её перед отправкой
         self.declare_and_bind_queue(queue_name, routing_key)
-
-        if "DC_QH_PROD_Q" in queue_name:
-            self.channel.basic_publish(
-                exchange="DC_QH_PROD_EX",
-                routing_key=routing_key,
-                body=message
-            )
-        else:
-            self.channel.basic_publish(
-                exchange=self.exchange_name,
-                routing_key=routing_key,
-                body=message
-            )
+        self.channel.basic_publish(
+            exchange=self.exchange_name,
+            routing_key=routing_key,
+            body=message
+        )
         print(f"Sent message to queue {queue_name}: {message}")

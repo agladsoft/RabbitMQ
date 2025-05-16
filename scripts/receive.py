@@ -1,4 +1,5 @@
-import copy
+import fcntl
+import asyncio
 import requests
 import time as time_
 from pathlib import Path
@@ -7,6 +8,7 @@ from scripts.tables import *
 from scripts.__init__ import *
 from pika import BasicProperties
 from datetime import datetime, time
+from asyncio import AbstractEventLoop
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
@@ -21,6 +23,7 @@ class Receive:
         )
         self.log_file: str = log_file
         self.rabbit_mq: RabbitMQ = RabbitMQ()
+        self.write_semaphore: asyncio.Semaphore = asyncio.Semaphore(1)
         self.client: Optional[Client] = None
         self.connect_to_db()
         self.count_message: int = 0
@@ -29,23 +32,24 @@ class Receive:
         self.table_name: Optional[str] = None
         self.message_errors: list = []
         self.queue_name_errors: list = []
+        self.key_deals_buffer: list = []
+        self.rows_buffer: list = []
+        self.log_message_buffer: list = []
+        self.delivery_tags: list = []
 
-    def connect_to_db(self) -> None:
+    def connect_to_db(self) -> Optional[Client]:
         """
         Connect to ClickHouse database.
         Establish a connection to the ClickHouse database. This method is called once when the script starts.
-        :return:
+        :return: ClickHouse client.
         """
         try:
-            client: Client = get_client(
+            self.client: Client = get_client(
                 host=get_my_env_var('HOST'),
                 database=get_my_env_var('DATABASE'),
                 username=get_my_env_var('USERNAME_DB'),
                 password=get_my_env_var('PASSWORD')
             )
-            client.query("SET allow_experimental_lightweight_delete=1")
-            self.logger.info("Success connected to clickhouse")
-            self.client = client
         except Exception as ex_connect:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
@@ -73,7 +77,13 @@ class Receive:
         :return:
         """
         with open(self.log_file, "w", encoding="utf-8") as f:
+            # Acquire exclusive lock on the file
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
             json.dump(stats, f, ensure_ascii=False, indent=4)
+
+            # Release the lock
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def update_stats(self) -> None:
         """
@@ -137,7 +147,13 @@ class Receive:
 
     def _send_with_retries(self, message: str) -> Optional[requests.Response]:
         """
-        Try sending the message up to 3 times with exponential backoff.
+        Send a message to the Telegram bot with exponential backoff.
+
+        Send a message to the Telegram bot with exponential backoff in case of errors.
+        If the message couldn't be sent after 3 attempts, method returns None.
+
+        :param message: Message to be sent.
+        :return: Response from the Telegram API, or None if the message couldn't be sent.
         """
         params: dict = {
             "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
@@ -196,7 +212,8 @@ class Receive:
         ch: Union[BlockingChannel, str],
         method: Union[Basic.Deliver, str],
         properties: Union[BasicProperties, str],
-        body: Union[bytes, str]
+        body: Union[bytes, str],
+        message_count: int
     ) -> None:
         """
         Callback function to process messages from the queue.
@@ -210,28 +227,34 @@ class Receive:
         :param method: The delivery method of the message.
         :param properties: The properties of the message.
         :param body: The body of the message, which is expected to be in bytes or string format.
+        :param message_count: The count of messages in the queue.
         :return:
         """
         self._check_and_update_log()
         self.count_message += 1
-        self.logger: logging.getLogger = get_logger(
-            str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
-        )
         self.logger.info(
             f"Callback start for ch={ch}, method={method}, properties={properties}, body_message called. "
             f"Count messages is {self.count_message}"
         )
-        all_data, data, data_core, key_deals = self.handle_incoming_json(body)
+        all_data, data, data_core, key_deals = self.handle_incoming_json(body, message_count)
         if data_core:
-            data_core.handle_rows(all_data, data, key_deals)
+            data_core.handle_rows(all_data, data, key_deals, message_count)
         else:
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
-            data_core_client(self).insert_message(all_data, key_deals, is_success_inserted=False)
+            data_core_client(self).insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError(f"Not found table name in dictionary. Russian table is {self.table_name}")
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
-    def process_data(self, all_data: dict, data, data_core: Any, eng_table_name: str, key_deals: str) -> None:
+    def process_data(
+        self,
+        all_data: dict,
+        data: list,
+        data_core: Any,
+        eng_table_name: str,
+        key_deals: str,
+        message_count: int
+    ) -> None:
         """
         Processes the given data, converting it to the required format and structure.
 
@@ -246,6 +269,7 @@ class Receive:
         :param data_core: An instance of a data core class that provides methods for data manipulation.
         :param eng_table_name: A string representing the English name of the table.
         :param key_deals: A string identifier for key deals.
+        :param message_count: The count of messages in the queue.
         :return: A string representing the generated file name.
         :raises AssertionError: If there are errors in data conversion or column name discrepancies.
         """
@@ -253,18 +277,22 @@ class Receive:
         self.logger.info(f'Starting read json. Length of json: {len(data)}. Table: {eng_table_name}')
         list_columns_db = list(set(data_core.get_table_columns()) - set(data_core.removed_columns_db))
         original_date_string: str = data_core.original_date_string
+        lowercase_data: bool = isinstance(data_core, FreightRates)
         try:
             for i in range(len(data)):
-                data[i] = data_core.convert_to_lowercase(data[i])
+                if lowercase_data:
+                    data[i] = data_core.convert_to_lowercase(data[i])
                 data_core.add_new_columns(data[i], file_name, original_date_string)
                 data_core.change_columns(data=data[i])
                 if original_date_string:
                     data[i][original_date_string] = data[i][original_date_string].strip() or None
         except Exception as ex:
             self.logger.error(f"Error converting data types. Table: {eng_table_name}. Exception: {ex}")
-            data_core.insert_message(all_data, key_deals, is_success_inserted=False)
+            data_core.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
-        if data and data_core.check_difference_columns(all_data, list_columns_db, list(data[0].keys()), key_deals):
+        if data and data_core.check_difference_columns(
+            all_data, list_columns_db, list(data[0].keys()), key_deals, message_count
+        ):
             raise AssertionError("Stop consuming because columns is different")
 
     @staticmethod
@@ -286,7 +314,7 @@ class Receive:
         key_deals: str = all_data.get("header", {}).get("key_id")
         return all_data, rus_table_name, key_deals
 
-    def handle_incoming_json(self, msg: Union[bytes, str, dict]) -> Tuple[dict, list, Any, str]:
+    def handle_incoming_json(self, msg: Union[bytes, str, dict], message_count: int = 0) -> Tuple[dict, list, Any, str]:
         """
         Handles an incoming JSON message.
 
@@ -304,6 +332,7 @@ class Receive:
         original data to a file in the errors directory.
 
         :param msg: The message to be processed, which can be bytes, string, or dictionary.
+        :param message_count: The count of messages in the queue.
         :return: A tuple containing the entire data as a dictionary, the Russian table name as a string,
                  the name of the JSON file as a string (or None if the English table name is not found),
                  the data core instance (or None if the English table name is not found), and the key deals
@@ -312,12 +341,12 @@ class Receive:
         all_data, rus_table_name, key_deals = self._parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
-        data: list = copy.deepcopy(all_data).get("data", [])
+        data: list = list(all_data.get("data", []))
         data_core: Any = CLASS_NAMES_AND_TABLES.get(eng_table_name)
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core(self)
-            self.process_data(all_data, data, data_core, eng_table_name, key_deals)
+            self.process_data(all_data, data, data_core, eng_table_name, key_deals, message_count)
         else:
             self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
             self.table_name = rus_table_name
@@ -351,7 +380,9 @@ class Receive:
             os.makedirs(fle.parent)  # Создаем директорию, если не существует
 
         with open(file_name, 'w') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             json.dump(msg, f, indent=4, ensure_ascii=False, default=serialize_datetime)
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
         return file_name
 
@@ -377,45 +408,64 @@ class Receive:
                 break
 
             self.logger.info(f"Got message with queue_name: {queue_name}")
-
+            queue_info = self.rabbit_mq.channel.queue_declare(queue=queue_name, passive=True)
+            message_count = queue_info.method.message_count  # Количество сообщений в очереди
             try:
-                self.callback(self.rabbit_mq.channel, method_frame, header_frame, body)
-                self.rabbit_mq.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+                self.delivery_tags.append(method_frame.delivery_tag)
+                self.callback(self.rabbit_mq.channel, method_frame, header_frame, body, message_count)
             except Exception as e:
                 self.logger.error(f"Ошибка обработки: {e}")
                 self.message_errors.append(self._parse_message(body)[2])
-                self.rabbit_mq.channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+                self.rabbit_mq.channel.basic_nack(delivery_tag=self.delivery_tags[-1], multiple=True)
                 self.queue_name_errors.append(queue_name)
+                self.key_deals_buffer: list = []
+                self.rows_buffer: list = []
+                self.log_message_buffer: list = []
+                self.delivery_tags: list = []
                 self.send_stats()
                 break
 
-    def main(self):
+    async def async_main(self):
         """
-        The main method of the script. Process messages from all queues in `QUEUES_AND_ROUTING_KEYS'.
+        Asynchronously processes multiple RabbitMQ queues in parallel.
 
-        1. In the first cycle, announces and binds all queues once.
-        2. In the second cycle, it infinitely processes messages from these queues.
-        3. If an error occurs, logs it and closes the connection.
+        This method sets up a loop to continuously process messages from multiple
+        RabbitMQ queues. It uses an asyncio semaphore to limit the number of
+        concurrent tasks to 10. For each queue, it creates and binds the queue
+        once and then continually processes messages from it, unless the queue
+        is in the error list. The method sleeps for a specified delay between
+        processing cycles.
 
-        :return:
+        A separate limited_process coroutine is used to handle the processing
+        of each queue, allowing for parallel execution of up to 10 queues.
+
+        :return: None
         """
+        loop: AbstractEventLoop = asyncio.get_running_loop()
         delay: int = 60
-        try:
-            # 1. Создаём и привязываем очереди один раз
-            for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
-                self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+        semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
 
-            # 2. Основной цикл обработки сообщений
-            while True:
-                for queue_name in QUEUES_AND_ROUTING_KEYS.keys():
-                    if queue_name not in self.queue_name_errors:
-                        self.process_queue(queue_name)
+        async def limited_process(queue_name_):
+            async with semaphore:
+                receive_instance: Receive = Receive()
+                receive_instance.queue_name_errors = self.queue_name_errors
+                await loop.run_in_executor(None, receive_instance.process_queue, queue_name_)
 
-                time_.sleep(delay)
-        except Exception as ex_:
-            self.logger.error(f"Error: {ex_}")
-        finally:
-            self.rabbit_mq.close()
+        # 1. Создаём и привязываем очереди один раз
+        ip_server: str = get_my_env_var('HOST_HOSTNAME')
+        for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
+            if SERVER_AND_SUFFIX_QUEUE.get(queue_name.split("_")[-1]) != ip_server:
+                raise "Queues don't match servers"
+            self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
+        while True:
+            tasks: list = [
+                limited_process(queue_name)
+                for queue_name in QUEUES_AND_ROUTING_KEYS.keys()
+                if queue_name not in self.queue_name_errors
+            ]
+            if tasks:
+                await asyncio.gather(*tasks)
+            await asyncio.sleep(delay)
 
 
 CLASSES: list = [
@@ -448,9 +498,11 @@ CLASSES: list = [
 
     # Данные по DO
     ManagerEvaluation,
-    ReferenceCounterparties
+    ReferenceCounterparties,
+    ReferenceContracts
 ]
 CLASS_NAMES_AND_TABLES: dict = dict(zip(list(TABLE_NAMES.values()), CLASSES))
 
 if __name__ == '__main__':
-    Receive().main()
+    # Для запуска асинхронного main
+    asyncio.run(Receive().async_main())
