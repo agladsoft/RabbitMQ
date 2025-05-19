@@ -25,8 +25,6 @@ class Receive:
             str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.log_file: str = log_file
-        self.db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
-        self.stats_table: Table = self.db.table('stats')
         self.rabbit_mq: RabbitMQ = RabbitMQ()
         self.client: Optional[Client] = None
         self.connect_to_db()
@@ -63,7 +61,12 @@ class Receive:
         Load statistics from TinyDB.
         :return: Loaded statistics as a dict.
         """
-        return {item['queue_name']: item['data'] for item in self.stats_table.all()}
+        db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
+        stats_table: Table = db.table('stats')
+        try:
+            return {item['queue_name']: item['data'] for item in stats_table.all()}
+        finally:
+            db.close()
 
     def save_stats(self, stats: dict) -> None:
         """
@@ -71,11 +74,16 @@ class Receive:
         :param stats: Statistics for save.
         :return:
         """
-        stats_query: Query = Query()
-        for queue_name, data in stats.items():
-            updated: list = self.stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
-            if not updated:
-                self.stats_table.insert({'queue_name': queue_name, 'data': data})
+        db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
+        stats_table: Table = db.table('stats')
+        try:
+            stats_query: Query = Query()
+            for queue_name, data in stats.items():
+                updated: list = stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
+                if not updated:
+                    stats_table.insert({'queue_name': queue_name, 'data': data})
+        finally:
+            db.close()
 
     def update_stats(self) -> None:
         """
