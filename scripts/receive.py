@@ -1,21 +1,20 @@
 import fcntl
 import asyncio
+import sqlite3
 import requests
 import time as time_
 from pathlib import Path
 from pika.spec import Basic
 from scripts.tables import *
 from scripts.__init__ import *
-from tinydb.table import Table
 from pika import BasicProperties
-from tinydb import TinyDB, Query
 from datetime import datetime, time
-from tinydb.queries import QueryLike
 from asyncio import AbstractEventLoop
+from sqlite3 import Connection, Cursor
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from typing import Tuple, Union, Optional, Any, cast
+from typing import Tuple, Union, Optional, Any
 from pika.adapters.blocking_connection import BlockingChannel
 
 
@@ -25,6 +24,7 @@ class Receive:
             str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.log_file: str = log_file
+        self._init_db()
         self.rabbit_mq: RabbitMQ = RabbitMQ()
         self.client: Optional[Client] = None
         self.connect_to_db()
@@ -38,6 +38,33 @@ class Receive:
         self.rows_buffer: list = []
         self.log_message_buffer: list = []
         self.delivery_tags: list = []
+
+    def _init_db(self) -> None:
+        """
+        Initialize the SQLite database.
+
+        This method creates a SQLite database file if it does not already exist.
+        It creates a table 'stats' with columns for queue name, timestamp,
+        count of messages, and processed table. The queue_name column is set as
+        the primary key. This setup is used to store statistics related to message
+        processing.
+
+        :return: None
+        """
+        conn: Connection = sqlite3.connect(self.log_file)
+        try:
+            cursor: Cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS stats (
+                    queue_name TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    count_message INTEGER,
+                    processed_table TEXT
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
 
     def connect_to_db(self) -> Optional[Client]:
         """
@@ -56,99 +83,58 @@ class Receive:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
 
-    def acquire_lock(self, lock_file: str) -> Optional[int]:
-        """
-        Acquire a lock on the file.
-        :param lock_file: Path to the lock file
-        :return: File descriptor if lock acquired, None otherwise
-        """
-        open_mode: int = os.O_RDWR | os.O_CREAT | os.O_TRUNC
-        fd: int = os.open(lock_file, open_mode)
-
-        pid: int = os.getpid()
-        lock_file_fd: Optional[int] = None
-
-        timeout: float = 5.0
-        start_time = current_time = time_.time()
-        while current_time < start_time + timeout:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except (IOError, OSError):
-                pass
-            else:
-                lock_file_fd = fd
-                break
-            self.logger.info(f'Process {pid} waiting for lock')
-            time_.sleep(1.0)
-            current_time: float = time_.time()
-        if lock_file_fd is None:
-            os.close(fd)
-        return lock_file_fd
-
-    @staticmethod
-    def release_lock(lock_file_fd: int) -> None:
-        """
-        Release the lock on the file.
-        :param lock_file_fd: File descriptor to release
-        """
-        if lock_file_fd is not None:
-            fcntl.flock(lock_file_fd, fcntl.LOCK_UN)
-            os.close(lock_file_fd)
-
     def load_stats(self) -> Optional[dict]:
         """
-        Load statistics from TinyDB.
+        Load statistics from SQLite database.
         :return: Loaded statistics as a dict.
         """
-        lock_fd = self._acquire_file_lock("Could not acquire lock for reading stats")
+        conn: Connection = sqlite3.connect(self.log_file)
         try:
-            db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
-            stats_table: Table = db.table('stats')
-            try:
-                return {item['queue_name']: item['data'] for item in stats_table.all()}
-            finally:
-                db.close()
+            cursor: Cursor = conn.cursor()
+            cursor.execute('SELECT * FROM stats')
+            rows: list = cursor.fetchall()
+            return {
+                row[0]: {
+                    "timestamp": row[1],
+                    "count_message": row[2],
+                    "processed_table": row[3]
+                }
+                for row in rows
+            }
         finally:
-            self.release_lock(lock_fd)
+            conn.close()
 
     def save_stats(self, stats: dict) -> None:
         """
-        Save statistics to TinyDB.
+        Save statistics to SQLite database.
         :param stats: Statistics for save.
-        :return:
+        :return: None
         """
-        lock_fd = self._acquire_file_lock("Could not acquire lock for saving stats")
+        conn: Connection = sqlite3.connect(self.log_file)
         try:
-            db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
-            stats_table: Table = db.table('stats')
-            try:
-                stats_query: Query = Query()
-                for queue_name, data in stats.items():
-                    updated: list = stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
-                    if not updated:
-                        stats_table.insert({'queue_name': queue_name, 'data': data})
-            finally:
-                db.close()
+            cursor: Cursor = conn.cursor()
+            for queue_name, data in stats.items():
+                cursor.execute('''
+                    INSERT OR REPLACE INTO stats (queue_name, timestamp, count_message, processed_table)
+                    VALUES (?, ?, ?, ?)
+                ''', (
+                    queue_name,
+                    data["timestamp"],
+                    data["count_message"],
+                    data["processed_table"]
+                ))
+            conn.commit()
         finally:
-            self.release_lock(lock_fd)
-
-    def _acquire_file_lock(self, error_message: str) -> int:
-        """
-        Acquire a lock on the stats file.
-        :param error_message: Error message to raise if lock acquisition fails
-        :return: File descriptor for the lock
-        :raises TimeoutError: If lock cannot be acquired within timeout
-        """
-        lock_file = f"{self.log_file}.lock"
-        result = self.acquire_lock(lock_file)
-        if result is None:
-            raise TimeoutError(error_message)
-        return result
+            conn.close()
 
     def update_stats(self) -> None:
         """
-        Update statistics in TinyDB.
-        :return:
+        Update statistics in SQLite database.
+
+        Load statistics from SQLite database. If self.queue_name not in statistics,
+        create new statistics for this queue. Update count messages and processed table for this queue.
+        Save statistics to SQLite database.
+        :return: None
         """
         stats: dict = self.load_stats()
         today: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
