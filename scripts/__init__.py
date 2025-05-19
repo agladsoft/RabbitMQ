@@ -22,7 +22,7 @@ BATCH_SIZE: int = 5000
 DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
 LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 LOG_DIR_NAME: str = f"{get_my_env_var('XL_IDP_ROOT_RABBITMQ')}/logging"
-LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.json"
+LOG_FILE: str = f"{LOG_DIR_NAME}/processed_messages.db"
 LOG_TABLE: str = "rmq_log"
 SERVER_AND_SUFFIX_QUEUE: dict = {
     "TEST": "10.23.4.203",

@@ -1,7 +1,7 @@
+import sqlite3
 import requests
-from tinydb import TinyDB
-from tinydb.table import Table
 from scripts.__init__ import *
+from sqlite3 import Connection, Cursor
 
 
 def handle_message(logs: dict, message: str, total_lines: int) -> str:
@@ -27,14 +27,29 @@ def send_message():
     logger: get_logger = get_logger(str(os.path.basename(__file__).replace(".py", "")))
     logger.info("Send message to telegram")
     message: str = "Не было сообщений"
+
     if os.path.exists(LOG_FILE):
-        db: TinyDB = TinyDB(LOG_FILE)
-        stats_table: Table = db.table('stats')
-        if logs := {
-            item['queue_name']: item['data'] for item in stats_table.all()
-        }:
-            total_lines: int = 0
-            message = handle_message(logs, message, total_lines)
+        conn: Connection = sqlite3.connect(LOG_FILE)
+        try:
+            cursor: Cursor = conn.cursor()
+            cursor.execute('SELECT * FROM stats')
+            if rows := cursor.fetchall():
+                logs: dict = {
+                    row[0]: {
+                        "timestamp": row[1],
+                        "count_message": row[2],
+                        "processed_table": row[3]
+                    }
+                    for row in rows
+                }
+                total_lines: int = 0
+                message = handle_message(logs, message, total_lines)
+
+                # Очищаем таблицу после отправки сообщения
+                cursor.execute('DELETE FROM stats')
+                conn.commit()
+        finally:
+            conn.close()
 
     params: dict = {
         "chat_id": f"{get_my_env_var('CHAT_ID')}/{get_my_env_var('TOPIC')}",
@@ -46,7 +61,6 @@ def send_message():
     url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
     response = requests.get(url, params=params)
     response.raise_for_status()
-    os.remove(LOG_FILE)
     return response
 
 
