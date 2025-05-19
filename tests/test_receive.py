@@ -1,4 +1,3 @@
-import asyncio
 import os
 import pytz
 import copy

@@ -1,4 +1,6 @@
 import requests
+from tinydb import TinyDB
+from tinydb.table import Table
 from scripts.__init__ import *
 
 
@@ -26,9 +28,11 @@ def send_message():
     logger.info("Send message to telegram")
     message: str = "Не было сообщений"
     if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'r') as f:
-            logs: dict = json.load(f)
-        if isinstance(logs, dict):
+        db: TinyDB = TinyDB(LOG_FILE)
+        stats_table: Table = db.table('stats')
+        if logs := {
+            item['queue_name']: item['data'] for item in stats_table.all()
+        }:
             total_lines: int = 0
             message = handle_message(logs, message, total_lines)
 

@@ -6,13 +6,16 @@ from pathlib import Path
 from pika.spec import Basic
 from scripts.tables import *
 from scripts.__init__ import *
+from tinydb.table import Table
 from pika import BasicProperties
+from tinydb import TinyDB, Query
 from datetime import datetime, time
+from tinydb.queries import QueryLike
 from asyncio import AbstractEventLoop
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
 from clickhouse_connect.driver import Client
-from typing import Tuple, Union, Optional, Any
+from typing import Tuple, Union, Optional, Any, cast
 from pika.adapters.blocking_connection import BlockingChannel
 
 
@@ -22,8 +25,9 @@ class Receive:
             str(os.path.basename(__file__).replace(".py", "_") + str(datetime.now(tz=TZ).date()))
         )
         self.log_file: str = log_file
+        self.db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
+        self.stats_table: Table = self.db.table('stats')
         self.rabbit_mq: RabbitMQ = RabbitMQ()
-        self.write_semaphore: asyncio.Semaphore = asyncio.Semaphore(1)
         self.client: Optional[Client] = None
         self.connect_to_db()
         self.count_message: int = 0
@@ -56,43 +60,26 @@ class Receive:
 
     def load_stats(self) -> dict:
         """
-        Load statistics from log file.
-
-        If file exists and not empty, method load statistics from file.
-        If file not exists or empty, method return empty dictionary.
-
-        :return: Loaded statistics.
+        Load statistics from TinyDB.
+        :return: Loaded statistics as a dict.
         """
-        if os.path.exists(self.log_file) and os.path.getsize(self.log_file) > 0:
-            with open(self.log_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
+        return {item['queue_name']: item['data'] for item in self.stats_table.all()}
 
     def save_stats(self, stats: dict) -> None:
         """
-        Save statistics to log file.
-
-        This method save statistics to log file with json format.
+        Save statistics to TinyDB.
         :param stats: Statistics for save.
         :return:
         """
-        with open(self.log_file, "w", encoding="utf-8") as f:
-            # Acquire exclusive lock on the file
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-
-            json.dump(stats, f, ensure_ascii=False, indent=4)
-
-            # Release the lock
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        stats_query: Query = Query()
+        for queue_name, data in stats.items():
+            updated: list = self.stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
+            if not updated:
+                self.stats_table.insert({'queue_name': queue_name, 'data': data})
 
     def update_stats(self) -> None:
         """
-        Update statistics in log file.
-
-        This method update statistics in log file. Statistics contain count of messages and processed table.
-        If queue_name not exists in statistics, method add it.
-        If queue_name exists in statistics, method update count of messages and processed table.
-
+        Update statistics in TinyDB.
         :return:
         """
         stats: dict = self.load_stats()
