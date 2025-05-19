@@ -56,17 +56,60 @@ class Receive:
             self.logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             raise ConnectionError from ex_connect
 
-    def load_stats(self) -> dict:
+    def acquire_lock(self, lock_file: str) -> Optional[int]:
+        """
+        Acquire a lock on the file.
+        :param lock_file: Path to the lock file
+        :return: File descriptor if lock acquired, None otherwise
+        """
+        open_mode: int = os.O_RDWR | os.O_CREAT | os.O_TRUNC
+        fd: int = os.open(lock_file, open_mode)
+
+        pid: int = os.getpid()
+        lock_file_fd: Optional[int] = None
+
+        timeout: float = 5.0
+        start_time = current_time = time_.time()
+        while current_time < start_time + timeout:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (IOError, OSError):
+                pass
+            else:
+                lock_file_fd = fd
+                break
+            self.logger.info(f'Process {pid} waiting for lock')
+            time_.sleep(1.0)
+            current_time: float = time_.time()
+        if lock_file_fd is None:
+            os.close(fd)
+        return lock_file_fd
+
+    @staticmethod
+    def release_lock(lock_file_fd: int) -> None:
+        """
+        Release the lock on the file.
+        :param lock_file_fd: File descriptor to release
+        """
+        if lock_file_fd is not None:
+            fcntl.flock(lock_file_fd, fcntl.LOCK_UN)
+            os.close(lock_file_fd)
+
+    def load_stats(self) -> Optional[dict]:
         """
         Load statistics from TinyDB.
         :return: Loaded statistics as a dict.
         """
-        db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
-        stats_table: Table = db.table('stats')
+        lock_fd = self._acquire_file_lock("Could not acquire lock for reading stats")
         try:
-            return {item['queue_name']: item['data'] for item in stats_table.all()}
+            db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
+            stats_table: Table = db.table('stats')
+            try:
+                return {item['queue_name']: item['data'] for item in stats_table.all()}
+            finally:
+                db.close()
         finally:
-            db.close()
+            self.release_lock(lock_fd)
 
     def save_stats(self, stats: dict) -> None:
         """
@@ -74,16 +117,33 @@ class Receive:
         :param stats: Statistics for save.
         :return:
         """
-        db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
-        stats_table: Table = db.table('stats')
+        lock_fd = self._acquire_file_lock("Could not acquire lock for saving stats")
         try:
-            stats_query: Query = Query()
-            for queue_name, data in stats.items():
-                updated: list = stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
-                if not updated:
-                    stats_table.insert({'queue_name': queue_name, 'data': data})
+            db: TinyDB = TinyDB(self.log_file, indent=4, ensure_ascii=False)
+            stats_table: Table = db.table('stats')
+            try:
+                stats_query: Query = Query()
+                for queue_name, data in stats.items():
+                    updated: list = stats_table.update({'data': data}, cast(QueryLike, stats_query.queue_name == queue_name))
+                    if not updated:
+                        stats_table.insert({'queue_name': queue_name, 'data': data})
+            finally:
+                db.close()
         finally:
-            db.close()
+            self.release_lock(lock_fd)
+
+    def _acquire_file_lock(self, error_message: str) -> int:
+        """
+        Acquire a lock on the stats file.
+        :param error_message: Error message to raise if lock acquisition fails
+        :return: File descriptor for the lock
+        :raises TimeoutError: If lock cannot be acquired within timeout
+        """
+        lock_file = f"{self.log_file}.lock"
+        result = self.acquire_lock(lock_file)
+        if result is None:
+            raise TimeoutError(error_message)
+        return result
 
     def update_stats(self) -> None:
         """
