@@ -845,7 +845,10 @@ class RZHDOperationsReport(DataCoreClient):
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
             int_columns=['container_size', 'operation_month', 'operation_year'],
-            date_columns=['operation_date'],
+            date_columns=[
+                'operation_date', 'departure_date', 'arrival_date', 'planned_start_date',
+                'planned_end_date', 'fact_start_date', 'fact_end_date'
+            ],
             bool_columns=kwargs.get('bool_columns', []),
             is_datetime=kwargs.get('is_datetime', False)
         )
