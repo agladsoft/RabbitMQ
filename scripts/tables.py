@@ -861,7 +861,8 @@ class RZHDOperationsReport(DataCoreClient):
             "department", "container_number", "etsng_code", "destination_point", "destination_station_code",
             "destination_point_type", "manager", "client_inn", "departure_point", "departure_station_code",
             "departure_point_type", "order_number", "operation_name", "container_type", "operation_year",
-            "original_file_parsed_on", "sign", "is_obsolete_date"
+            "departure_date", "arrival_date", "planned_start_date", "planned_end_date", "fact_start_date",
+            "fact_end_date", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
 
 
