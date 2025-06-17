@@ -1164,7 +1164,7 @@ class ReferenceContracts(DataCoreClient):
             float_columns=kwargs.get('float_columns', []),
             int_columns=kwargs.get('int_columns', []),
             date_columns=[
-                'contract_date', 'date_of_creation', 'approvals_date', 'signing_date',
+                'date_of_creation', 'approvals_date', 'signing_date',
                 'returned_archive_date', 'date_tripartite_agreement'
             ],
             bool_columns=['returned_archive', 'additional_agreement'],
