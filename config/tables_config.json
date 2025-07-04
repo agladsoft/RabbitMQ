@@ -54,5 +54,7 @@
     "СправочникКонтрагентовДО":
         "reference_counterparties",
     "СправочникДоговорыДО":
-        "reference_contracts"
+        "reference_contracts",
+    "DO_STAFF_RT":
+        "staff"
 }

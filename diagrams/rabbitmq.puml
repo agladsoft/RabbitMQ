@@ -40,35 +40,75 @@ Receive --> JsonEncoder : uses
 
 
 @startuml
-participant Receive as receive
-participant RabbitMQ as rabbitmq
-participant DataCore as data_core
+title "Полная последовательность обработки данных"
 
-activate receive
-receive->>rabbitmq: get(queue_name)
+participant "1С:Предприятие" as onec
+participant "RabbitMQ Server\n10.23.4.199" as rabbitmq
+participant "Receive" as receive
+participant "DataCoreClient" as datacore
+participant "Test DB\n10.23.4.203" as testdb
+participant "Prod DB\n10.23.4.196" as proddb
+
+note over onec: Этап 1: Генерация данных
+activate onec
+onec->>rabbitmq: Отправка данных в очереди
+note right: Данные отправляются в\nразличные очереди\n(Queue1, Queue2, ...)
 activate rabbitmq
-rabbitmq-->>receive: message
-deactivate rabbitmq
+
+note over receive: Этап 2: Получение сообщений
+activate receive
+receive->>rabbitmq: Подключение к очереди
+rabbitmq-->>receive: Получение сообщения
+note right: process_queue(queue_name)
+
+note over receive: Этап 3: Обработка сообщения
 receive->>receive: callback(ch, method, properties, body)
 activate receive
-receive->>receive: handle_incoming_json(body)
-activate receive
-receive->>receive: _parse_message(body)
-activate receive
+receive->>receive: handle_incoming_json(msg)
+receive->>receive: _parse_message(msg)
+note right: Парсинг JSON\nПолучение all_data,\nrus_table_name, key_deals
 receive-->>receive: all_data, rus_table_name, key_deals
 deactivate receive
-receive->>receive: process_data(all_data, data, data_core, eng_table_name, key_deals)
-activate receive
-receive->>data_core: handle_rows(all_data, data, key_deals)
-activate data_core
-data_core-->>receive:
-deactivate data_core
-deactivate receive
-deactivate receive
+
+note over receive, datacore: Этап 4: Передача данных для обработки
+receive->>datacore: process_data(all_data, data, data_core, eng_table_name, key_deals)
+activate datacore
+
+note over datacore: Этап 5: Обработка и трансформация
+datacore->>datacore: change_columns(data)
+datacore->>datacore: convert_format_date()
+datacore->>datacore: add_new_columns()
+datacore->>datacore: convert_to_lowercase()
+datacore->>datacore: check_difference_columns()
+
+note over datacore: Этап 6: Работа с базами данных
+datacore->>datacore: get_table_columns()
+datacore->>datacore: handle_rows(all_data, data, key_deals)
+
+alt Тестовая среда
+    datacore->>testdb: insert_message() / update_status()
+    activate testdb
+    testdb-->>datacore: Результат операции
+    deactivate testdb
+else Продакшн среда  
+    datacore->>proddb: insert_message() / update_status()
+    activate proddb
+    proddb-->>datacore: Результат операции
+    deactivate proddb
+end
+
+datacore-->>receive: Завершение обработки
+deactivate datacore
+
+note over receive: Этап 7: Подтверждение обработки
 receive->>rabbitmq: basic_ack(delivery_tag)
-activate rabbitmq
-deactivate rabbitmq
+note right: Подтверждение успешной\nобработки сообщения
+rabbitmq-->>receive: ACK подтвержден
 deactivate receive
+deactivate rabbitmq
+deactivate onec
+
+note over onec, proddb: Процесс завершен успешно
 @enduml
 
 
@@ -256,27 +296,37 @@ package "receive_py" {
 
 DataCoreClient --> Receive
 
-queue Queue1
-queue Queue2
-queue Queue3
-queue Queue4
-queue Queue5
-queue Queue6
-queue Queue7
-queue Queue8
-queue Queue9
-queue Queue10
-queue ...
+database "Test Database 10.23.4.203" as TestDB
+database "Production Database 10.23.4.196" as ProdDB
+DataCoreClient --> TestDB : "отправка обработанных данных"
+DataCoreClient --> ProdDB : "отправка обработанных данных"
 
-Receive --> Queue1
-Receive --> Queue2
-Receive --> Queue3
-Receive --> Queue4
-Receive --> Queue5
-Receive --> Queue6
-Receive --> Queue7
-Receive --> Queue8
-Receive --> Queue9
-Receive --> Queue10
-Receive --> "..."
+cloud "RabbitMQ Server 10.23.4.199" as RabbitMQ {
+    queue Queue1
+    queue Queue2
+    queue Queue3
+    queue Queue4
+    queue Queue5
+    queue Queue6
+    queue Queue7
+    queue Queue8
+    queue Queue9
+    queue Queue10
+    queue OtherQueues
+}
+
+Receive --> Queue1 : "подключение к очереди"
+Receive --> Queue2 : "подключение к очереди"
+Receive --> Queue3 : "подключение к очереди"
+Receive --> Queue4 : "подключение к очереди"
+Receive --> Queue5 : "подключение к очереди"
+Receive --> Queue6 : "подключение к очереди"
+Receive --> Queue7 : "подключение к очереди"
+Receive --> Queue8 : "подключение к очереди"
+Receive --> Queue9 : "подключение к очереди"
+Receive --> Queue10 : "подключение к очереди"
+Receive --> OtherQueues : "подключение к очереди"
+
+actor "1С:Предприятие" as 1С
+1С --> RabbitMQ : "отправка данных"
 @enduml
