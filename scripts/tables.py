@@ -1181,3 +1181,29 @@ class ReferenceContracts(DataCoreClient):
             "returned_archive", "returned_archive_date", "date_tripartite_agreement", "number_tripartite_agreement",
             "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
+
+
+class Staff(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def database(self):
+        return "DO"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=['pluralist'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "manager_id", "manager_fullname", "manager_email", "manager_position", "pluralist",
+            "manager_division", "manager_division_id", "manager_department", "manager_department_id", "manager_status",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
