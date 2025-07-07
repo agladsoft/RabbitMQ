@@ -55,6 +55,6 @@
         "reference_counterparties",
     "СправочникДоговорыДО":
         "reference_contracts",
-    "DO_STAFF_RT":
+    "СправочникФизическиеЛицаДО":
         "staff"
 }
