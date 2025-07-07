@@ -1203,7 +1203,7 @@ class Staff(DataCoreClient):
 
     def get_table_columns(self):
         return [
-            "key_id", "uuid", "manager_id", "manager_fullname", "manager_email", "manager_position", "pluralist",
-            "manager_division", "manager_division_id", "manager_department", "manager_department_id", "manager_status",
-            "original_file_parsed_on", "sign", "is_obsolete_date"
+            "key_id", "uuid", "manager_fullname", "manager_email", "manager_position_name", "manager_position_id",
+            "pluralist", "manager_division_name", "manager_division_id", "manager_department_name",
+            "manager_department_id", "manager_status", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
