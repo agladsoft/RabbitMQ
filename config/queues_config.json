@@ -55,6 +55,6 @@
         "DO_REFERENCE_COUNTERPARTIES_RT",
     "DO_REFERENCE_CONTRACTS_QUEUE_TEST":
         "DO_REFERENCE_CONTRACTS_RT",
-    "DO_STAFF_QUEUE_TEST":
+    "СправочникФизическиеЛицаДО":
         "DO_STAFF_RT"
 }
