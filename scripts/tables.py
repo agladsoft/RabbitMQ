@@ -1297,7 +1297,7 @@ class Staff(DataCoreClient):
             bool_columns=['pluralist'],
             is_datetime=kwargs.get('is_datetime', False)
         )
-        del data['uuid'] if data.get('uuid') else None
+        data.pop('uuid', None)
 
     def get_table_columns(self):
         return [
