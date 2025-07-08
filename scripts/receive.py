@@ -536,6 +536,10 @@ CLASSES: list = [
     SalesPlan,
     TerminalsCapacity,
     TransportUnits,
+    RegisterOrders,
+    RegisterOrdersContainer,
+    RegisterOrdersSegment,
+    RegisterOrdersTransportUnits,
 
     # Данные по DO
     ManagerEvaluation,
