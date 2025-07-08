@@ -1090,6 +1090,102 @@ class TerminalsCapacity(DataCoreClient):
         ]
 
 
+class RegisterOrders(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['order_date', 'last_update_order', 'sales_start_date', 'sales_end_date'],
+            bool_columns=['is_multimodality'],
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "order_date", "last_update_order", "prepared_name", "sales_name",
+            "sales_uid", "sales_start_date", "sales_end_date", "prepared_cfo", "prepared_uid", "order_cfo",
+            "organisation_name", "organisation_inn", "organisation_uid", "project_crm", "project_crm_uid",
+            "transport_units_plan", "container_dc_plan", "container_hc_plan", "is_multimodality",
+            "original_date_string", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
+
+class RegisterOrdersContainer(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "container_number", "container_type", "consignment", "container_owner",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
+
+class RegisterOrdersSegment(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    @property
+    def original_date_string(self):
+        return "original_date_string"
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=['planned_start_date', 'planned_end_date', 'fact_start_date', 'fact_end_date'],
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "logistics_segment", "point_departure", "point_destination",
+            "planned_start_date", "planned_end_date", "fact_start_date", "fact_end_date", "current_state",
+            "condition_status", "original_date_string", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
+
+class RegisterOrdersTransportUnits(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=kwargs.get('float_columns', []),
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "transport_units_number", "transport_units_type", "transport_units_owner",
+            "transport_units_view", "transport_units_redistration", "transport_units_documents",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
 class ManagerEvaluation(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
@@ -1192,14 +1288,16 @@ class Staff(DataCoreClient):
         return "DO"
 
     def change_columns(self, *args, **kwargs) -> None:
+        data: dict = kwargs.get('data')
         super().change_columns(
-            data=kwargs.get('data'),
+            data=data,
             float_columns=kwargs.get('float_columns', []),
             int_columns=kwargs.get('int_columns', []),
             date_columns=kwargs.get('date_columns', []),
             bool_columns=['pluralist'],
             is_datetime=kwargs.get('is_datetime', False)
         )
+        del data['uuid'] if data.get('uuid') else None
 
     def get_table_columns(self):
         return [

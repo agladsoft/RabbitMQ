@@ -49,6 +49,14 @@
         "terminals_capacity",
     "ВладельцыКонтейнеров":
         "transport_units",
+    "ДанныеСделки":
+        "register_orders",
+    "КонтейнерыСделки":
+        "register_orders_container",
+    "ЛогистикаСделки":
+        "register_orders_segment",
+    "ТССделки":
+        "register_orders_transport_units",
     "ОценкиМенеджеров":
         "manager_evaluation",
     "СправочникКонтрагентовДО":
