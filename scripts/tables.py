@@ -1289,14 +1289,16 @@ class Staff(DataCoreClient):
         return "DO"
 
     def change_columns(self, *args, **kwargs) -> None:
+        data: dict = kwargs.get('data')
         super().change_columns(
-            data=kwargs.get('data'),
+            data=data,
             float_columns=kwargs.get('float_columns', []),
             int_columns=kwargs.get('int_columns', []),
             date_columns=kwargs.get('date_columns', []),
             bool_columns=['pluralist'],
             is_datetime=kwargs.get('is_datetime', False)
         )
+        del data['uuid'] if data.get('uuid') else None
 
     def get_table_columns(self):
         return [
