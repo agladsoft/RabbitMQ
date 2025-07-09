@@ -1102,7 +1102,7 @@ class RegisterOrders(DataCoreClient):
         super().change_columns(
             data=kwargs.get('data'),
             float_columns=kwargs.get('float_columns', []),
-            int_columns=['transport_units_plan', 'container_dc_plan', 'container_hc_plan'],
+            int_columns=['container_dc_plan', 'container_hc_plan'],
             date_columns=['order_date', 'last_update_order', 'sales_start_date', 'sales_end_date'],
             bool_columns=['is_multimodality'],
             is_datetime=kwargs.get('is_datetime', False)
