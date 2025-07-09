@@ -328,7 +328,6 @@ class Receive:
                 if original_date_string:
                     data[i][original_date_string] = data[i][original_date_string].strip() or None
         except Exception as ex:
-            self.logger.error(f"Data: {data}")
             self.logger.error(f"Error converting data types. Table: {eng_table_name}. Exception: {ex}")
             data_core.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
