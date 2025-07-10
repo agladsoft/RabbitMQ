@@ -1,10 +1,12 @@
 import re
+import os
+from pathlib import Path
 import pytz
 import json
 import contextlib
 from datetime import datetime, date, timedelta
-from scripts.__init__ import LOG_TABLE, BATCH_SIZE
 from clickhouse_connect.driver.query import QueryResult
+from scripts.__init__ import LOG_TABLE, BATCH_SIZE, get_my_env_var
 from typing import TYPE_CHECKING, Tuple, Union, Optional, List, Any
 
 if TYPE_CHECKING:
@@ -269,6 +271,23 @@ class DataCoreClient:
             self.receive.rows_buffer = []
             self.receive.log_message_buffer = []
 
+    def write_to_json(self, msg: dict, eng_table_name: str, dir_name: str = "json") -> None:
+        """
+        Write data to json file
+        :param msg:
+        :param eng_table_name:
+        :param dir_name:
+        :return:
+        """
+        self.receive.logger.info(f"Saving data to file {datetime.now(tz=TZ)}_{eng_table_name}.json")
+        file_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/{dir_name}/{datetime.now(tz=TZ)}_{eng_table_name}" \
+                         f".json"
+        fle: Path = Path(file_name)
+        if not os.path.exists(os.path.dirname(fle)):
+            os.makedirs(os.path.dirname(fle))
+        with open(file_name, 'w') as file:
+            json.dump(msg, file, indent=4, ensure_ascii=False, default=serialize_datetime)
+
     def handle_rows(self, all_data, data: list, key_deals: str, message_count: int) -> None:
         """
         Handles a list of rows to be inserted into the ClickHouse database.
@@ -306,6 +325,7 @@ class DataCoreClient:
                 self.receive.logger.info("The data has been uploaded to the database")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
         except Exception as ex:
+            self.write_to_json(all_data, "unknown", dir_name="errors")
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise ConnectionError(ex) from ex
