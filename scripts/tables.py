@@ -306,6 +306,7 @@ class DataCoreClient:
                 self.receive.logger.info("The data has been uploaded to the database")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
         except Exception as ex:
+            self.receive.logger.error(f" Data is {data}")
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise ConnectionError(ex) from ex
