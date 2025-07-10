@@ -306,6 +306,7 @@ class DataCoreClient:
         :return: None
         """
         deduped_buffer = []  # Инициализируем переменную
+        columns = []  # Инициализируем переменную
         try:
             self.receive.key_deals_buffer.append(key_deals)
             for row in data:
@@ -326,7 +327,20 @@ class DataCoreClient:
                 self.receive.logger.info("The data has been uploaded to the database")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
         except Exception as ex:
-            self.write_to_json(deduped_buffer, "unknown", dir_name="errors")
+            # Преобразуем данные в структурированный формат
+            structured_data = []
+            if columns and deduped_buffer:
+                for row in deduped_buffer:
+                    row_dict = {col: val for col, val in zip(columns, row)}
+                    structured_data.append(row_dict)
+            
+            error_data = {
+                "data": structured_data,
+                "table": self.table,
+                "database": self.database,
+                "key_deals": key_deals
+            }
+            self.write_to_json(error_data, "unknown", dir_name="errors")
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise ConnectionError(ex) from ex
