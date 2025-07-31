@@ -894,10 +894,11 @@ class RZHDOperationsReport(DataCoreClient):
             "is_border_crossing_point", "service", "client_uid", "client", "etsng_name", "container_size",
             "operation_month", "operation_date", "original_operation_date_string", "direction", "type_of_relation",
             "department", "container_number", "etsng_code", "destination_point", "destination_station_code",
-            "destination_point_type", "manager", "client_inn", "departure_point", "departure_station_code",
-            "departure_point_type", "order_number", "operation_name", "container_type", "operation_year",
-            "wagon_number", "wagon_owner", "departure_date", "arrival_date", "planned_start_date", "planned_end_date",
-            "fact_start_date", "fact_end_date", "original_file_parsed_on", "sign", "is_obsolete_date"
+            "destination_point_type", "destination_border_crossing", "manager", "client_inn", "departure_point",
+            "departure_station_code", "departure_point_type", "departure_border_crossing", "order_number",
+            "operation_name", "container_type", "operation_year", "wagon_number", "wagon_owner", "departure_date",
+            "arrival_date", "planned_start_date", "planned_end_date", "fact_start_date", "fact_end_date",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
 
 
