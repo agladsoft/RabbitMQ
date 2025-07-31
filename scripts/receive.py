@@ -3,7 +3,6 @@ import asyncio
 import sqlite3
 import requests
 import time as time_
-from pathlib import Path
 from pika.spec import Basic
 from scripts.tables import *
 from scripts.__init__ import *
@@ -279,7 +278,8 @@ class Receive:
         )
         all_data, data, data_core, key_deals = self.handle_incoming_json(body, message_count)
         if data_core:
-            data_core.handle_rows(all_data, data, key_deals, message_count)
+            is_success_inserted: Optional[bool] = None if key_deals is None else True
+            data_core.handle_rows(all_data, data, key_deals, message_count, is_success_inserted)
         else:
             data_core_client = DataCoreClient
             data_core_client.table = all_data.get("header", {}).get("report")
@@ -337,7 +337,7 @@ class Receive:
             raise AssertionError("Stop consuming because columns is different")
 
     @staticmethod
-    def _parse_message(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str]:
+    def _parse_message(msg: Union[bytes, str, dict]) -> Tuple[dict, str, str, bool]:
         """
         Decodes and parses a message to extract relevant information.
 
@@ -353,9 +353,14 @@ class Receive:
         all_data: dict = json.loads(msg) if isinstance(msg, str) else msg
         rus_table_name: str = all_data.get("header", {}).get("report")
         key_deals: str = all_data.get("header", {}).get("key_id")
-        return all_data, rus_table_name, key_deals
+        is_truncate: bool = all_data.get("header", {}).get("is_truncate")
+        return all_data, rus_table_name, key_deals, is_truncate
 
-    def handle_incoming_json(self, msg: Union[bytes, str, dict], message_count: int = 0) -> Tuple[dict, list, Any, str]:
+    def handle_incoming_json(
+        self,
+        msg: Union[bytes, str, dict],
+        message_count: int = 0
+    ) -> Tuple[dict, list, Any, Optional[str]]:
         """
         Handles an incoming JSON message.
 
@@ -379,7 +384,7 @@ class Receive:
                  the data core instance (or None if the English table name is not found), and the key deals
                  identifier as a string.
         """
-        all_data, rus_table_name, key_deals = self._parse_message(msg)
+        all_data, rus_table_name, key_deals, is_truncate = self._parse_message(msg)
         eng_table_name: str = TABLE_NAMES.get(rus_table_name)
         self.table_name = eng_table_name
         data: list = list(all_data.get("data", []))
@@ -387,6 +392,10 @@ class Receive:
         if data_core:
             data_core.table = eng_table_name
             data_core: Any = data_core(self)
+            if is_truncate and not data:
+                self.logger.warning(f"Data needs to be truncated. Table is {eng_table_name}")
+                data_core.delete_old_deals(cond="key_id IS NOT NULL")
+                return all_data, data, data_core, None
             self.process_data(all_data, data, data_core, eng_table_name, key_deals, message_count)
         else:
             self.logger.error(f"Not found table name in dictionary. Russian table is {rus_table_name}")
@@ -484,7 +493,7 @@ class Receive:
         """
         loop: AbstractEventLoop = asyncio.get_running_loop()
         delay: int = 60
-        semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
+        semaphore: asyncio.Semaphore = asyncio.Semaphore(1)  # максимум 10 параллельных задач
 
         async def limited_process(queue_name_):
             async with semaphore:
@@ -495,8 +504,8 @@ class Receive:
         # 1. Создаём и привязываем очереди один раз
         ip_server: str = get_my_env_var('HOST_HOSTNAME')
         for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
-            if SERVER_AND_SUFFIX_QUEUE.get(queue_name.split("_")[-1]) != ip_server:
-                raise "Queues don't match servers"
+            # if SERVER_AND_SUFFIX_QUEUE.get(queue_name.split("_")[-1]) != ip_server:
+                # raise "Queues don't match servers"
             self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
         while True:
             tasks: list = [
