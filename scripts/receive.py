@@ -493,7 +493,7 @@ class Receive:
         """
         loop: AbstractEventLoop = asyncio.get_running_loop()
         delay: int = 60
-        semaphore: asyncio.Semaphore = asyncio.Semaphore(1)  # максимум 10 параллельных задач
+        semaphore: asyncio.Semaphore = asyncio.Semaphore(10)  # максимум 10 параллельных задач
 
         async def limited_process(queue_name_):
             async with semaphore:
@@ -504,8 +504,8 @@ class Receive:
         # 1. Создаём и привязываем очереди один раз
         ip_server: str = get_my_env_var('HOST_HOSTNAME')
         for queue_name, routing_key in QUEUES_AND_ROUTING_KEYS.items():
-            # if SERVER_AND_SUFFIX_QUEUE.get(queue_name.split("_")[-1]) != ip_server:
-                # raise "Queues don't match servers"
+            if SERVER_AND_SUFFIX_QUEUE.get(queue_name.split("_")[-1]) != ip_server:
+                raise "Queues don't match servers"
             self.rabbit_mq.declare_and_bind_queue(queue_name, routing_key)
         while True:
             tasks: list = [
