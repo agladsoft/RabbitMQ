@@ -269,7 +269,14 @@ class DataCoreClient:
             self.receive.rows_buffer = []
             self.receive.log_message_buffer = []
 
-    def handle_rows(self, all_data, data: list, key_deals: str, message_count: int) -> None:
+    def handle_rows(
+        self,
+        all_data,
+        data: list,
+        key_deals: str,
+        message_count: int,
+        is_success_inserted: bool = True
+    ) -> None:
         """
         Handles a list of rows to be inserted into the ClickHouse database.
 
@@ -284,6 +291,7 @@ class DataCoreClient:
         :param data: A list of data rows to be processed.
         :param key_deals: A string identifier for key deals.
         :param message_count: Queue message count.
+        :param is_success_inserted: A boolean indicating whether the message was successfully inserted.
         :return: None
         """
         try:
@@ -304,7 +312,7 @@ class DataCoreClient:
                 self.receive.key_deals_buffer = []
                 self.receive.delivery_tags = []
                 self.receive.logger.info("The data has been uploaded to the database")
-            self.insert_message(all_data, key_deals, message_count, is_success_inserted=True)
+            self.insert_message(all_data, key_deals, message_count, is_success_inserted=is_success_inserted)
         except Exception as ex:
             self.receive.logger.error(f"Exception is {ex}. Type of ex is {type(ex)}")
             self.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
