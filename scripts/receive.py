@@ -550,6 +550,8 @@ CLASSES: list = [
     RegisterOrdersContainer,
     RegisterOrdersSegment,
     RegisterOrdersTransportUnits,
+    RegisterOrdersFinancialSpending,
+    RegisterOrdersMarginalIncome,
 
     # Данные по DO
     ManagerEvaluation,

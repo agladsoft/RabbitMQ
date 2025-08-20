@@ -1195,6 +1195,53 @@ class RegisterOrdersTransportUnits(DataCoreClient):
             "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
 
+
+class RegisterOrdersFinancialSpending(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=["amount", "amount_excluding_vat"],
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "nomenclature", "amount", "amount_excluding_vat",
+            "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
+
+class RegisterOrdersMarginalIncome(DataCoreClient):
+    def __init__(self, receive: "Receive"):
+        super().__init__(receive=receive)
+
+    def change_columns(self, *args, **kwargs) -> None:
+        super().change_columns(
+            data=kwargs.get('data'),
+            float_columns=[
+                "income_plan", "income_fact", "spending_plan", "spending_fact",
+                "md_plan", "md_fact", "md_plan_percentage", "md_fact_percentage"
+            ],
+            int_columns=kwargs.get('int_columns', []),
+            date_columns=kwargs.get('date_columns', []),
+            bool_columns=kwargs.get('bool_columns', []),
+            is_datetime=kwargs.get('is_datetime', False)
+        )
+
+    def get_table_columns(self):
+        return [
+            "key_id", "uuid", "order_number", "income_plan", "spending_plan", "income_fact",
+            "spending_fact", "md_plan", "md_fact", "md_plan_percentage", "md_fact_percentage",
+            "segment", "original_file_parsed_on", "sign", "is_obsolete_date"
+        ]
+
+
 class ManagerEvaluation(DataCoreClient):
     def __init__(self, receive: "Receive"):
         super().__init__(receive=receive)
