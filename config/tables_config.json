@@ -57,6 +57,10 @@
         "register_orders_segment",
     "ТССделки":
         "register_orders_transport_units",
+    "ФинансовыеРасходы":
+        "register_orders_financial_spending",
+    "ДанныеМаржинальногоДоходаПоСегментам":
+        "register_orders_marginal_income",
     "ОценкиМенеджеров":
         "manager_evaluation",
     "СправочникКонтрагентовДО":
