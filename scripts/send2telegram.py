@@ -5,7 +5,7 @@ from notifiers import get_notifier
 from sqlite3 import Connection, Cursor
 
 
-def send_email_notifiers(message: str, subject: str = "Уведомление от системы экспорта"):
+def send_email_notifiers(message: str, subject: str = "Уведомление от системы rabbitmq"):
     """
     Отправка email через Mail.ru
     """
