@@ -10,6 +10,7 @@ from scripts.__init__ import *
 from pika import BasicProperties
 from datetime import datetime, time
 from asyncio import AbstractEventLoop
+from scripts.send2telegram import send_email_notifiers
 from sqlite3 import Connection, Cursor
 from scripts.rabbit_mq import RabbitMQ
 from clickhouse_connect import get_client
@@ -152,10 +153,10 @@ class Receive:
         self.save_stats(stats)
 
     def _check_and_update_log(
-        self,
-        current_time: time = datetime.now(tz=TZ).time().replace(second=0, microsecond=0),
-        required_time: time = time(hour=19, minute=58),
-        time_sleep: int = 300
+            self,
+            current_time: time = datetime.now(tz=TZ).time().replace(second=0, microsecond=0),
+            required_time: time = time(hour=19, minute=58),
+            time_sleep: int = 300
     ) -> bool:
         """
         Check time and update log if necessary.
@@ -207,6 +208,7 @@ class Receive:
         for attempt in range(3):
             try:
                 response = requests.get(url, params=params, timeout=120)
+                send_email_notifiers(params.get('text'))
                 response.raise_for_status()
                 return response
             except requests.RequestException as e:
@@ -233,13 +235,13 @@ class Receive:
             return None
 
         message: str = (
-            f"\n"
-            f"📥 Очередь: `{self.queue_name}` пустая\n"
-            f"📊 Обработанная таблица: `{self.table_name}`\n"
-            f"🔢 Количество сообщений: {self.count_message}\n"
-            f"🚨 Количество ошибок: {len(self.message_errors)}\n"
-            f"⚠️ Ошибки: `{self.message_errors}`"
-        )[:4090]
+                           f"\n"
+                           f"📥 Очередь: `{self.queue_name}` пустая\n"
+                           f"📊 Обработанная таблица: `{self.table_name}`\n"
+                           f"🔢 Количество сообщений: {self.count_message}\n"
+                           f"🚨 Количество ошибок: {len(self.message_errors)}\n"
+                           f"⚠️ Ошибки: `{self.message_errors}`"
+                       )[:4090]
         self.logger.info(message)
         if not self.message_errors:
             self.update_stats()
@@ -249,12 +251,12 @@ class Receive:
         return self._send_with_retries(message)
 
     def callback(
-        self,
-        ch: Union[BlockingChannel, str],
-        method: Union[Basic.Deliver, str],
-        properties: Union[BasicProperties, str],
-        body: Union[bytes, str],
-        message_count: int
+            self,
+            ch: Union[BlockingChannel, str],
+            method: Union[Basic.Deliver, str],
+            properties: Union[BasicProperties, str],
+            body: Union[bytes, str],
+            message_count: int
     ) -> None:
         """
         Callback function to process messages from the queue.
@@ -289,13 +291,13 @@ class Receive:
         self.logger.info("Callback exit. The data from the queue was processed by the script")
 
     def process_data(
-        self,
-        all_data: dict,
-        data: list,
-        data_core: Any,
-        eng_table_name: str,
-        key_deals: str,
-        message_count: int
+            self,
+            all_data: dict,
+            data: list,
+            data_core: Any,
+            eng_table_name: str,
+            key_deals: str,
+            message_count: int
     ) -> None:
         """
         Processes the given data, converting it to the required format and structure.
@@ -333,7 +335,7 @@ class Receive:
             data_core.insert_message(all_data, key_deals, message_count, is_success_inserted=False)
             raise AssertionError("Stop consuming because receive an error where converting data types") from ex
         if data and data_core.check_difference_columns(
-            all_data, list_columns_db, list(data[0].keys()), key_deals, message_count
+                all_data, list_columns_db, list(data[0].keys()), key_deals, message_count
         ):
             raise AssertionError("Stop consuming because columns is different")
 
@@ -358,9 +360,9 @@ class Receive:
         return all_data, rus_table_name, key_deals, is_truncate
 
     def handle_incoming_json(
-        self,
-        msg: Union[bytes, str, dict],
-        message_count: int = 0
+            self,
+            msg: Union[bytes, str, dict],
+            message_count: int = 0
     ) -> Tuple[dict, list, Any, Optional[str]]:
         """
         Handles an incoming JSON message.
@@ -404,10 +406,10 @@ class Receive:
         return all_data, data, data_core, key_deals
 
     def write_to_json(
-        self,
-        msg: dict,
-        eng_table_name: str,
-        dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
+            self,
+            msg: dict,
+            eng_table_name: str,
+            dir_name: str = f"{get_my_env_var('XL_IDP_PATH_RABBITMQ')}/json"
     ) -> str:
         """
         Writes a JSON message to a file.
