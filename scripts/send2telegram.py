@@ -1,8 +1,30 @@
 import sqlite3
 import requests
 from scripts.__init__ import *
+from notifiers import get_notifier
 from sqlite3 import Connection, Cursor
 
+
+def send_email_notifiers(message: str, subject: str = "Уведомление от системы rabbitmq"):
+    """
+    Отправка email через Mail.ru
+    """
+    try:
+        email = get_notifier('email')
+        email.notify(
+            to=get_my_env_var('RECIPIENT_EMAIL'),
+            subject=subject,
+            message=message,
+            from_=get_my_env_var('EMAIL_USER'),
+            host='smtp.mail.ru',
+            port=587,
+            username=get_my_env_var('EMAIL_USER'),
+            password=get_my_env_var('EMAIL_PASSWORD'),
+            tls=True
+        )
+        print(f"Email успешно отправлен на {get_my_env_var('RECIPIENT_EMAIL')}")
+    except Exception as e:
+        print(f"Ошибка при отправке email: {e}")
 
 def handle_message(logs: dict, message: str, total_lines: int) -> str:
     messages: list = []
@@ -61,6 +83,7 @@ def send_message():
     url: str = f"https://api.telegram.org/bot{get_my_env_var('TOKEN_TELEGRAM')}/sendMessage"
     response = requests.get(url, params=params)
     response.raise_for_status()
+    send_email_notifiers(params.get('text'))
     return response
 
 
