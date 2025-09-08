@@ -104,6 +104,161 @@ XL_IDP_PATH_RABBITMQ=/path/to/rabbitmq/files
 XL_IDP_ROOT_RABBITMQ=/path/to/project/root
 ```
 
+5. **Настройка очередей и таблиц:**
+
+5.1. Создайте файл `queues_config.json` в `config` директории:
+```json
+{
+    "DC_ACCOUNTING_DOCUMENTS_REQUESTS_QUEUE":
+        "DC_ACCOUNTING_DOCUMENTS_REQUESTS_RT",
+    "DC_ACCOUNTS_QUEUE":
+        "DC_ACCOUNTS_RT",
+    "DC_AUTOVISITS_QUEUE":
+        "DC_AUTOVISITS_RT",
+    "DC_AUTO_PICKUP_GENERAL_REPORT_QUEUE":
+        "DC_AUTO_PICKUP_GENERAL_REPORT_RT",
+    "DC_COMPLETED_REPACKAGES_REPORT_QUEUE":
+        "DC_COMPLETED_REPACKAGES_REPORT_RT",
+    "DC_CONSIGNMENTS_QUEUE":
+        "DC_CONSIGNMENTS_RT",
+    "DC_COUNTERPARTIES_QUEUE":
+        "DC_COUNTERPARTIES_RT",
+    "DC_DAILY_SUMMARY_QUEUE":
+        "DC_DAILY_SUMMARY_RT",
+    "DC_DATACORE_FREIGHT_QUEUE":
+        "DC_DATACORE_FREIGHT_RT",
+    "DC_DEVELOPMENT_COUNTERPARTY_BY_DEPARTMENT_QUEUE":
+        "DC_DEVELOPMENT_COUNTERPARTY_BY_DEPARTMENT_RT",
+    "DC_EXPORT_BOOKINGS_QUEUE":
+        "DC_EXPORT_BOOKINGS_RT",
+    "DC_FREIGHT_RATES_QUEUE":
+        "DC_FREIGHT_RATES_RT",
+    "DC_IMPORT_BOOKINGS_QUEUE":
+        "DC_IMPORT_BOOKINGS_RT",
+    "DC_MARGINALITY_ORDERS_BY_ACT_DATE_QUEUE":
+        "DC_MARGINALITY_ORDERS_BY_ACT_DATE_RT",
+    "DC_NATURAL_INDICATORS_BY_CONTRACTS_SEGMENTS_QUEUE":
+        "DC_NATURAL_INDICATORS_BY_CONTRACTS_SEGMENTS_RT",
+    "DC_NATURAL_INDICATORS_BY_TRANSACTION_FACT_DATE_QUEUE":
+        "DC_NATURAL_INDICATORS_BY_TRANSACTION_FACT_DATE_RT",
+    "DC_NATURAL_INDICATORS_OF_RAILWAY_RECEPTION_AND_DISPATCH_QUEUE":
+        "DC_NATURAL_INDICATORS_OF_RAILWAY_RECEPTION_AND_DISPATCH_RT",
+    "DC_ORDERS_MARGINALITY_REPORT_QUEUE":
+        "DC_ORDERS_MARGINALITY_REPORT_RT",
+    "DC_ORDERS_REPORT_QUEUE":
+        "DC_ORDERS_REPORT_RT",
+    "DC_REFERENCE_LOCATIONS_QUEUE":
+        "DC_REFERENCE_LOCATIONS_RT",
+    "DC_RUSCON_PRODUCTS_QUEUE":
+        "DC_RUSCON_PRODUCTS_RT",
+    "DC_RZHD_BY_OPERATIONS_REPORT_QUEUE":
+        "DC_RZHD_BY_OPERATIONS_REPORT_RT",
+    "DC_SALES_PLAN_QUEUE":
+        "DC_SALES_PLAN_RT",
+    "DC_TERMINALS_CAPACITY_QUEUE":
+        "DC_TERMINALS_CAPACITY_RT",
+    "DC_TRANSPORT_UNITS_QUEUE":
+        "DC_TRANSPORT_UNITS_RT",
+    "DC_REGISTER_ORDERS_QUEUE":
+        "DC_REGISTER_ORDERS_RT",
+    "DC_REGISTER_ORDERS_CONTAINER_QUEUE":
+        "DC_REGISTER_ORDERS_CONTAINER_RT",
+    "DC_REGISTER_ORDERS_SEGMENT_QUEUE":
+        "DC_REGISTER_ORDERS_SEGMENT_RT",
+    "DC_REGISTER_ORDERS_TRANSPORT_UNITS_QUEUE":
+        "DC_REGISTER_ORDERS_TRANSPORT_UNITS_RT",
+    "DC_REGISTER_ORDERS_FINANCIAL_SPENDING_QUEUE":
+        "DC_REGISTER_ORDERS_FINANCIAL_SPENDING_RT",
+    "DC_REGISTER_ORDERS_MARGINAL_INCOME_QUEUE":
+        "DC_REGISTER_ORDERS_MARGINAL_INCOME_RT",
+    "DO_MANAGER_EVALUATION_QUEUE":
+        "DO_MANAGER_EVALUATION_RT",
+    "DO_REFERENCE_COUNTERPARTIES_QUEUE":
+        "DO_REFERENCE_COUNTERPARTIES_RT",
+    "DO_REFERENCE_CONTRACTS_QUEUE":
+        "DO_REFERENCE_CONTRACTS_RT",
+    "DO_STAFF_QUEUE":
+        "DO_STAFF_RT"
+}
+```
+Для теста будут такие же очереди, но только с суффиксом `_TEST`. Пример: `DO_STAFF_QUEUE_TEST`
+
+5.2. Создайте файл `tables_config.json` в `config` директории:
+```json
+{
+    "ОтчетПоОбращениямВПЭО":
+        "accounting_documents_requests",
+    "СуммыСчетовПокупателям":
+        "accounts",
+    "ОтчетАвтовизиты":
+        "autovisits",
+    "ОбщийОтчетПоАвтовывозу":
+        "auto_pickup_general_report",
+    "ОтчетПоЗавершеннымПеретаркам":
+        "completed_repackages_report",
+    "СписокКоносаментов":
+        "consignments",
+    "СписокКонтрагентов":
+        "counterparties",
+    "ОтчетЕжедневнаяСводка":
+        "daily_summary",
+    "ОтчетПоКонтролируемомуИНеконтролируемомуФрахту":
+        "datacore_freight",
+    "РегистрСведенийКонтрагентыРазвитияПоЦФО":
+        "development_counterparty_by_department",
+    "ОтчетExportBookings":
+        "export_bookings",
+    "СтавкиФрахта":
+        "freight_rates",
+    "ОтчетImportBookings":
+        "import_bookings",
+    "МаржинальностиСделокНаОсновеАктов":
+        "marginality_orders_by_act_date",
+    "ОтчетНатуральныеПоказателиПоСделкамИСегментам":
+        "natural_indicators_by_contracts_segments",
+    "ОтчетПоНатуральнымНаОсновеОперацийПоФактическимДатам":
+        "natural_indicators_by_transaction_fact_date",
+    "ОтчетНатуральныеПоказателиПриемаИОтправкиПоЖД_TEU":
+        "natural_indicators_of_railway_reception_and_dispatch",
+    "ОтчетПоМаржинальностиСделок":
+        "orders_marginality_report",
+    "ОтчетПоПоручениям":
+        "orders_report",
+    "СправочникМестоположения":
+        "reference_locations",
+    "ДокументКоммерческоеПредложение":
+        "ruscon_products",
+    "ОтчетПоЖДПеревозкамМаркетингПоОперациям":
+        "rzhd_by_operations_report",
+    "РегистрСведенийПланПродаж":
+        "sales_plan",
+    "ФактическаяЕмкостьТерминала":
+        "terminals_capacity",
+    "ВладельцыКонтейнеров":
+        "transport_units",
+    "ДанныеСделки":
+        "register_orders",
+    "КонтейнерыСделки":
+        "register_orders_container",
+    "ЛогистикаСделки":
+        "register_orders_segment",
+    "ТССделки":
+        "register_orders_transport_units",
+    "ФинансовыеРасходы":
+        "register_orders_financial_spending",
+    "ДанныеМаржинальногоДоходаПоСегментам":
+        "register_orders_marginal_income",
+    "ОценкиМенеджеров":
+        "manager_evaluation",
+    "СправочникКонтрагентовДО":
+        "reference_counterparties",
+    "СправочникДоговорыДО":
+        "reference_contracts",
+    "СправочникФизическиеЛицаДО":
+        "staff"
+}
+```
+
 ## 🔧 Сборка и развертывание
 
 ### Локальная разработка
