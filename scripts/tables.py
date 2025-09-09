@@ -1048,7 +1048,7 @@ class RusconProducts(DataCoreClient):
             "container_type", "container_count", "container_count_40", "container_count_20", "cargo", "kp_currency",
             "kp_amount", "kp_amount_cost", "kp_margin", "kp_margin_amount", "kp_margin_container",
             "kp_revenue_rate_container", "kp_cost_container", "discharge_point", "loading_point", "dangerous",
-            "original_kp_date_string", "original_file_parsed_on", "sign", "is_obsolete_date"
+            "original_kp_date_string", "counterparty_uid", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
 
 
