@@ -1349,8 +1349,8 @@ class Staff(DataCoreClient):
             data=data,
             float_columns=kwargs.get('float_columns', []),
             int_columns=kwargs.get('int_columns', []),
-            date_columns=kwargs.get('date_columns', []),
-            bool_columns=['pluralist'],
+            date_columns=['employment_date', 'dismissal_date'],
+            bool_columns=['pluralist', 'is_main_jobtitle'],
             is_datetime=kwargs.get('is_datetime', False)
         )
         data.pop('uuid', None)
@@ -1359,5 +1359,6 @@ class Staff(DataCoreClient):
         return [
             "key_id", "uuid", "manager_fullname", "manager_email", "manager_position_name", "manager_position_id",
             "pluralist", "manager_division_name", "manager_division_id", "manager_department_name",
-            "manager_department_id", "manager_status", "original_file_parsed_on", "sign", "is_obsolete_date"
+            "manager_department_id", "manager_status", "employment_date", "is_main_jobtitle", "dismissal_date",
+            "rn_guid", "original_file_parsed_on", "sign", "is_obsolete_date"
         ]
